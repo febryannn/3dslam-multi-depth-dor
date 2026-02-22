@@ -1,0 +1,240 @@
+[0.000000] (-) TimerEvent: {}
+[0.000964] (-) JobUnselected: {'identifier': 'agv_sim'}
+[0.001137] (-) JobUnselected: {'identifier': 'localization'}
+[0.001177] (-) JobUnselected: {'identifier': 'mapping'}
+[0.001205] (-) JobUnselected: {'identifier': 'marvelmind_driver'}
+[0.001231] (-) JobUnselected: {'identifier': 'marvelmind_msgs'}
+[0.001255] (-) JobUnselected: {'identifier': 'navigasi'}
+[0.001278] (-) JobUnselected: {'identifier': 'pointcloud_concatenate'}
+[0.001302] (-) JobUnselected: {'identifier': 'pointcloud_to_grid'}
+[0.001329] (-) JobUnselected: {'identifier': 'robot_description'}
+[0.001356] (-) JobUnselected: {'identifier': 'udp_bot'}
+[0.001381] (-) JobUnselected: {'identifier': 'udp_bot_msgs'}
+[0.001408] (kinect_ros2) JobQueued: {'identifier': 'kinect_ros2', 'dependencies': OrderedDict()}
+[0.001441] (kinect_ros2) JobStarted: {'identifier': 'kinect_ros2'}
+[0.012888] (kinect_ros2) JobProgress: {'identifier': 'kinect_ros2', 'progress': 'cmake'}
+[0.013749] (kinect_ros2) JobProgress: {'identifier': 'kinect_ros2', 'progress': 'build'}
+[0.014488] (kinect_ros2) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/febryan/febryan_ws/build/kinect_ros2', '--', '-j12', '-l12'], 'cwd': '/home/febryan/febryan_ws/build/kinect_ros2', 'env': OrderedDict({'LESSOPEN': '| /usr/bin/lesspipe %s', 'GZ_SIM_RESOURCE_PATH': '/opt/ros/jazzy/share', 'USER': 'febryan', 'GZ_CONFIG_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor/share/gz:/opt/ros/jazzy/opt/sdformat_vendor/share/gz:/opt/ros/jazzy/opt/gz_gui_vendor/share/gz:/opt/ros/jazzy/opt/gz_transport_vendor/share/gz:/opt/ros/jazzy/opt/gz_rendering_vendor/share/gz:/opt/ros/jazzy/opt/gz_plugin_vendor/share/gz:/opt/ros/jazzy/opt/gz_fuel_tools_vendor/share/gz:/opt/ros/jazzy/opt/gz_msgs_vendor/share/gz:/opt/ros/jazzy/opt/gz_common_vendor/share/gz', 'XDG_SESSION_TYPE': 'wayland', 'SHLVL': '1', 'LD_LIBRARY_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor/lib:/opt/ros/jazzy/opt/gz_sensors_vendor/lib:/opt/ros/jazzy/opt/gz_physics_vendor/lib:/opt/ros/jazzy/opt/sdformat_vendor/lib:/opt/ros/jazzy/opt/rviz_ogre_vendor/lib:/opt/ros/jazzy/lib/x86_64-linux-gnu:/opt/ros/jazzy/opt/gz_gui_vendor/lib:/opt/ros/jazzy/opt/gz_transport_vendor/lib:/opt/ros/jazzy/opt/gz_rendering_vendor/lib:/opt/ros/jazzy/opt/gz_plugin_vendor/lib:/opt/ros/jazzy/opt/gz_fuel_tools_vendor/lib:/opt/ros/jazzy/opt/gz_msgs_vendor/lib:/opt/ros/jazzy/opt/gz_common_vendor/lib:/opt/ros/jazzy/opt/gz_math_vendor/lib:/opt/ros/jazzy/opt/gz_utils_vendor/lib:/opt/ros/jazzy/opt/gz_tools_vendor/lib:/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib:/opt/ros/jazzy/opt/gz_dartsim_vendor/lib:/opt/ros/jazzy/opt/gz_cmake_vendor/lib:/opt/ros/jazzy/lib', 'HOME': '/home/febryan', 'OLDPWD': '/home/febryan/febryan_ws', 'DESKTOP_SESSION': 'ubuntu', 'ROS_PYTHON_VERSION': '3', 'GNOME_SHELL_SESSION_MODE': 'ubuntu', 'GTK_MODULES': 'gail:atk-bridge', 'SYSTEMD_EXEC_PID': '2175', 'GSM_SKIP_SSH_AGENT_WORKAROUND': 'true', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus', 'COLORTERM': 'truecolor', 'GNOME_KEYRING_CONTROL': '/run/user/1000/keyring', 'DEBUGINFOD_URLS': 'https://debuginfod.ubuntu.com', 'IM_CONFIG_PHASE': '1', 'WAYLAND_DISPLAY': 'wayland-0', 'ROS_DISTRO': 'jazzy', 'LOGNAME': 'febryan', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'MEMORY_PRESSURE_WATCH': '/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.SettingsDaemon.MediaKeys.service/memory.pressure', 'XDG_SESSION_CLASS': 'user', 'USERNAME': 'febryan', 'TERM': 'xterm-256color', 'GNOME_DESKTOP_SESSION_ID': 'this-is-deprecated', 'PATH': '/opt/ros/jazzy/opt/gz_msgs_vendor/bin:/opt/ros/jazzy/opt/gz_tools_vendor/bin:/opt/ros/jazzy/opt/gz_ogre_next_vendor/bin:/opt/ros/jazzy/bin:/usr/local/MATLAB/R2025b/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin', 'SESSION_MANAGER': 'local/gerald:@/tmp/.ICE-unix/1955,unix/gerald:/tmp/.ICE-unix/1955', 'XDG_MENU_PREFIX': 'gnome-', 'GNOME_TERMINAL_SCREEN': '/org/gnome/Terminal/screen/779f8231_9a78_4aee_b1c6_2c0e9b691a10', 'GNOME_SETUP_DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'DISPLAY': ':0', 'LANG': 'en_US.UTF-8', 'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'XMODIFIERS': '@im=ibus', 'XDG_SESSION_DESKTOP': 'ubuntu', 'XAUTHORITY': '/run/user/1000/.mutter-Xwaylandauth.VP8SK3', 'LS_COLORS': 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.crdownload=00;90:*.dpkg-dist=00;90:*.dpkg-new=00;90:*.dpkg-old=00;90:*.dpkg-tmp=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:*.swp=00;90:*.tmp=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:', 'GNOME_TERMINAL_SERVICE': ':1.117', 'SSH_AUTH_SOCK': '/run/user/1000/keyring/ssh', 'AMENT_PREFIX_PATH': '/opt/ros/jazzy', 'SHELL': '/bin/bash', 'QT_ACCESSIBILITY': '1', 'GDMSESSION': 'ubuntu', 'LESSCLOSE': '/usr/bin/lesspipe %s %s', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'QT_IM_MODULE': 'ibus', 'PWD': '/home/febryan/febryan_ws/build/kinect_ros2', 'LC_ALL': 'en_US.UTF-8', 'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/etc/xdg', 'XDG_DATA_DIRS': '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop', 'PYTHONPATH': '/opt/ros/jazzy/lib/python3.12/site-packages', 'COLCON': '1', 'MEMORY_PRESSURE_WRITE': 'c29tZSAyMDAwMDAgMjAwMDAwMAA=', 'VTE_VERSION': '7600', 'CMAKE_PREFIX_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor:/opt/ros/jazzy/opt/gz_sensors_vendor:/opt/ros/jazzy/opt/gz_physics_vendor:/opt/ros/jazzy/opt/sdformat_vendor:/opt/ros/jazzy/opt/gz_gui_vendor:/opt/ros/jazzy/opt/gz_transport_vendor:/opt/ros/jazzy/opt/gz_rendering_vendor:/opt/ros/jazzy/opt/gz_plugin_vendor:/opt/ros/jazzy/opt/gz_fuel_tools_vendor:/opt/ros/jazzy/opt/gz_msgs_vendor:/opt/ros/jazzy/opt/gz_common_vendor:/opt/ros/jazzy/opt/gz_math_vendor:/opt/ros/jazzy/opt/gz_utils_vendor:/opt/ros/jazzy/opt/gz_tools_vendor:/opt/ros/jazzy/opt/gz_ogre_next_vendor:/opt/ros/jazzy/opt/gz_dartsim_vendor:/opt/ros/jazzy/opt/gz_cmake_vendor:/opt/ros/jazzy'}), 'shell': False}
+[0.099539] (-) TimerEvent: {}
+[0.103665] (kinect_ros2) StdoutLine: {'line': b'[ 25%] \x1b[32mBuilding CXX object CMakeFiles/kinect_ros2_component.dir/src/kinect_ros2_component.cpp.o\x1b[0m\n'}
+[0.199649] (-) TimerEvent: {}
+[0.300094] (-) TimerEvent: {}
+[0.400540] (-) TimerEvent: {}
+[0.500898] (-) TimerEvent: {}
+[0.601275] (-) TimerEvent: {}
+[0.701610] (-) TimerEvent: {}
+[0.801942] (-) TimerEvent: {}
+[0.902255] (-) TimerEvent: {}
+[1.002563] (-) TimerEvent: {}
+[1.102882] (-) TimerEvent: {}
+[1.203222] (-) TimerEvent: {}
+[1.303565] (-) TimerEvent: {}
+[1.403899] (-) TimerEvent: {}
+[1.504267] (-) TimerEvent: {}
+[1.604637] (-) TimerEvent: {}
+[1.704984] (-) TimerEvent: {}
+[1.805330] (-) TimerEvent: {}
+[1.905752] (-) TimerEvent: {}
+[2.006097] (-) TimerEvent: {}
+[2.106504] (-) TimerEvent: {}
+[2.206817] (-) TimerEvent: {}
+[2.307144] (-) TimerEvent: {}
+[2.407576] (-) TimerEvent: {}
+[2.507943] (-) TimerEvent: {}
+[2.608300] (-) TimerEvent: {}
+[2.708712] (-) TimerEvent: {}
+[2.809092] (-) TimerEvent: {}
+[2.909444] (-) TimerEvent: {}
+[3.009802] (-) TimerEvent: {}
+[3.110109] (-) TimerEvent: {}
+[3.210493] (-) TimerEvent: {}
+[3.311183] (-) TimerEvent: {}
+[3.411506] (-) TimerEvent: {}
+[3.511823] (-) TimerEvent: {}
+[3.612167] (-) TimerEvent: {}
+[3.712528] (-) TimerEvent: {}
+[3.812922] (-) TimerEvent: {}
+[3.913233] (-) TimerEvent: {}
+[4.013535] (-) TimerEvent: {}
+[4.057584] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:\x1b[m\x1b[K In static member function \xe2\x80\x98\x1b[01m\x1b[Kstatic void kinect_ros2::KinectRosComponent::\x1b[01;32m\x1b[Kdepth_cb\x1b[m\x1b[K(freenect_device*, void*, uint32_t)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[4.058246] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:109:53:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kunused parameter \xe2\x80\x98\x1b[01m\x1b[Kdev\x1b[m\x1b[K\xe2\x80\x99 [\x1b[01;35m\x1b[K\x1b]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter\x07-Wunused-parameter\x1b]8;;\x07\x1b[m\x1b[K]\n'}
+[4.058365] (kinect_ros2) StderrLine: {'line': b'  109 | void KinectRosComponent::depth_cb(\x1b[01;35m\x1b[Kfreenect_device * dev\x1b[m\x1b[K, void * depth_ptr, uint32_t timestamp)\n'}
+[4.058481] (kinect_ros2) StderrLine: {'line': b'      |                                   \x1b[01;35m\x1b[K~~~~~~~~~~~~~~~~~~^~~\x1b[m\x1b[K\n'}
+[4.058603] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:109:85:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kunused parameter \xe2\x80\x98\x1b[01m\x1b[Ktimestamp\x1b[m\x1b[K\xe2\x80\x99 [\x1b[01;35m\x1b[K\x1b]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter\x07-Wunused-parameter\x1b]8;;\x07\x1b[m\x1b[K]\n'}
+[4.058697] (kinect_ros2) StderrLine: {'line': b'  109 | ctRosComponent::depth_cb(freenect_device * dev, void * depth_ptr, \x1b[01;35m\x1b[Kuint32_t timestamp\x1b[m\x1b[K)\n'}
+[4.058781] (kinect_ros2) StderrLine: {'line': b'      |                                                                   \x1b[01;35m\x1b[K~~~~~~~~~^~~~~~~~~\x1b[m\x1b[K\n'}
+[4.058863] (kinect_ros2) StderrLine: {'line': b'\n'}
+[4.058947] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:\x1b[m\x1b[K In static member function \xe2\x80\x98\x1b[01m\x1b[Kstatic void kinect_ros2::KinectRosComponent::\x1b[01;32m\x1b[Krgb_cb\x1b[m\x1b[K(freenect_device*, void*, uint32_t)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[4.059031] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:123:51:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kunused parameter \xe2\x80\x98\x1b[01m\x1b[Kdev\x1b[m\x1b[K\xe2\x80\x99 [\x1b[01;35m\x1b[K\x1b]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter\x07-Wunused-parameter\x1b]8;;\x07\x1b[m\x1b[K]\n'}
+[4.059116] (kinect_ros2) StderrLine: {'line': b'  123 | void KinectRosComponent::rgb_cb(\x1b[01;35m\x1b[Kfreenect_device * dev\x1b[m\x1b[K, void * rgb_ptr, uint32_t timestamp)\n'}
+[4.059199] (kinect_ros2) StderrLine: {'line': b'      |                                 \x1b[01;35m\x1b[K~~~~~~~~~~~~~~~~~~^~~\x1b[m\x1b[K\n'}
+[4.059278] (kinect_ros2) StderrLine: {'line': b'\x1b[01m\x1b[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:123:81:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kunused parameter \xe2\x80\x98\x1b[01m\x1b[Ktimestamp\x1b[m\x1b[K\xe2\x80\x99 [\x1b[01;35m\x1b[K\x1b]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter\x07-Wunused-parameter\x1b]8;;\x07\x1b[m\x1b[K]\n'}
+[4.059360] (kinect_ros2) StderrLine: {'line': b'  123 | KinectRosComponent::rgb_cb(freenect_device * dev, void * rgb_ptr, \x1b[01;35m\x1b[Kuint32_t timestamp\x1b[m\x1b[K)\n'}
+[4.059453] (kinect_ros2) StderrLine: {'line': b'      |                                                                   \x1b[01;35m\x1b[K~~~~~~~~~^~~~~~~~~\x1b[m\x1b[K\n'}
+[4.059575] (kinect_ros2) StderrLine: {'line': b'\n'}
+[4.113647] (-) TimerEvent: {}
+[4.213938] (-) TimerEvent: {}
+[4.314244] (-) TimerEvent: {}
+[4.414582] (-) TimerEvent: {}
+[4.514906] (-) TimerEvent: {}
+[4.615269] (-) TimerEvent: {}
+[4.715617] (-) TimerEvent: {}
+[4.815940] (-) TimerEvent: {}
+[4.916286] (-) TimerEvent: {}
+[5.016667] (-) TimerEvent: {}
+[5.116963] (-) TimerEvent: {}
+[5.217272] (-) TimerEvent: {}
+[5.318003] (-) TimerEvent: {}
+[5.418318] (-) TimerEvent: {}
+[5.518666] (-) TimerEvent: {}
+[5.619215] (-) TimerEvent: {}
+[5.719555] (-) TimerEvent: {}
+[5.819905] (-) TimerEvent: {}
+[5.920231] (-) TimerEvent: {}
+[6.020567] (-) TimerEvent: {}
+[6.120906] (-) TimerEvent: {}
+[6.221250] (-) TimerEvent: {}
+[6.321555] (-) TimerEvent: {}
+[6.422148] (-) TimerEvent: {}
+[6.522452] (-) TimerEvent: {}
+[6.622787] (-) TimerEvent: {}
+[6.723104] (-) TimerEvent: {}
+[6.823430] (-) TimerEvent: {}
+[6.923744] (-) TimerEvent: {}
+[7.024051] (-) TimerEvent: {}
+[7.124452] (-) TimerEvent: {}
+[7.224850] (-) TimerEvent: {}
+[7.325138] (-) TimerEvent: {}
+[7.425430] (-) TimerEvent: {}
+[7.525759] (-) TimerEvent: {}
+[7.626071] (-) TimerEvent: {}
+[7.726378] (-) TimerEvent: {}
+[7.826688] (-) TimerEvent: {}
+[7.926971] (-) TimerEvent: {}
+[8.020596] (kinect_ros2) StdoutLine: {'line': b'[ 50%] \x1b[32m\x1b[1mLinking CXX shared library libkinect_ros2_component.so\x1b[0m\n'}
+[8.027077] (-) TimerEvent: {}
+[8.127377] (-) TimerEvent: {}
+[8.227817] (-) TimerEvent: {}
+[8.328141] (-) TimerEvent: {}
+[8.428545] (-) TimerEvent: {}
+[8.439414] (kinect_ros2) StdoutLine: {'line': b'[ 50%] Built target kinect_ros2_component\n'}
+[8.473267] (kinect_ros2) StdoutLine: {'line': b'[ 75%] \x1b[32mBuilding CXX object CMakeFiles/kinect_ros2_node.dir/src/kinect_ros2_node.cpp.o\x1b[0m\n'}
+[8.528679] (-) TimerEvent: {}
+[8.629017] (-) TimerEvent: {}
+[8.729358] (-) TimerEvent: {}
+[8.829696] (-) TimerEvent: {}
+[8.930266] (-) TimerEvent: {}
+[9.030609] (-) TimerEvent: {}
+[9.130927] (-) TimerEvent: {}
+[9.231271] (-) TimerEvent: {}
+[9.331627] (-) TimerEvent: {}
+[9.432047] (-) TimerEvent: {}
+[9.532402] (-) TimerEvent: {}
+[9.632729] (-) TimerEvent: {}
+[9.733031] (-) TimerEvent: {}
+[9.833362] (-) TimerEvent: {}
+[9.933743] (-) TimerEvent: {}
+[10.034059] (-) TimerEvent: {}
+[10.134381] (-) TimerEvent: {}
+[10.235025] (-) TimerEvent: {}
+[10.335346] (-) TimerEvent: {}
+[10.435852] (-) TimerEvent: {}
+[10.536268] (-) TimerEvent: {}
+[10.636762] (-) TimerEvent: {}
+[10.737098] (-) TimerEvent: {}
+[10.837412] (-) TimerEvent: {}
+[10.937753] (-) TimerEvent: {}
+[11.038070] (-) TimerEvent: {}
+[11.138358] (-) TimerEvent: {}
+[11.238661] (-) TimerEvent: {}
+[11.338966] (-) TimerEvent: {}
+[11.439292] (-) TimerEvent: {}
+[11.539617] (-) TimerEvent: {}
+[11.639921] (-) TimerEvent: {}
+[11.740296] (-) TimerEvent: {}
+[11.840597] (-) TimerEvent: {}
+[11.940881] (-) TimerEvent: {}
+[12.041525] (-) TimerEvent: {}
+[12.141862] (-) TimerEvent: {}
+[12.242195] (-) TimerEvent: {}
+[12.342542] (-) TimerEvent: {}
+[12.442858] (-) TimerEvent: {}
+[12.543171] (-) TimerEvent: {}
+[12.643506] (-) TimerEvent: {}
+[12.743848] (-) TimerEvent: {}
+[12.844188] (-) TimerEvent: {}
+[12.944487] (-) TimerEvent: {}
+[13.044774] (-) TimerEvent: {}
+[13.145070] (-) TimerEvent: {}
+[13.245377] (-) TimerEvent: {}
+[13.345722] (-) TimerEvent: {}
+[13.446048] (-) TimerEvent: {}
+[13.546432] (-) TimerEvent: {}
+[13.646763] (-) TimerEvent: {}
+[13.747045] (-) TimerEvent: {}
+[13.847330] (-) TimerEvent: {}
+[13.947633] (-) TimerEvent: {}
+[14.047949] (-) TimerEvent: {}
+[14.148264] (-) TimerEvent: {}
+[14.248532] (-) TimerEvent: {}
+[14.348822] (-) TimerEvent: {}
+[14.449113] (-) TimerEvent: {}
+[14.549425] (-) TimerEvent: {}
+[14.649763] (-) TimerEvent: {}
+[14.750051] (-) TimerEvent: {}
+[14.850352] (-) TimerEvent: {}
+[14.950682] (-) TimerEvent: {}
+[15.050980] (-) TimerEvent: {}
+[15.151308] (-) TimerEvent: {}
+[15.251645] (-) TimerEvent: {}
+[15.351959] (-) TimerEvent: {}
+[15.452241] (-) TimerEvent: {}
+[15.552532] (-) TimerEvent: {}
+[15.652820] (-) TimerEvent: {}
+[15.753116] (-) TimerEvent: {}
+[15.853431] (-) TimerEvent: {}
+[15.888910] (kinect_ros2) StdoutLine: {'line': b'[100%] \x1b[32m\x1b[1mLinking CXX executable kinect_ros2_node\x1b[0m\n'}
+[15.953567] (-) TimerEvent: {}
+[16.053878] (-) TimerEvent: {}
+[16.154206] (-) TimerEvent: {}
+[16.254941] (-) TimerEvent: {}
+[16.355279] (-) TimerEvent: {}
+[16.455665] (-) TimerEvent: {}
+[16.556000] (-) TimerEvent: {}
+[16.594123] (kinect_ros2) StdoutLine: {'line': b'[100%] Built target kinect_ros2_node\n'}
+[16.613266] (kinect_ros2) CommandEnded: {'returncode': 0}
+[16.614029] (kinect_ros2) JobProgress: {'identifier': 'kinect_ros2', 'progress': 'install'}
+[16.628942] (kinect_ros2) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/febryan/febryan_ws/build/kinect_ros2'], 'cwd': '/home/febryan/febryan_ws/build/kinect_ros2', 'env': OrderedDict({'LESSOPEN': '| /usr/bin/lesspipe %s', 'GZ_SIM_RESOURCE_PATH': '/opt/ros/jazzy/share', 'USER': 'febryan', 'GZ_CONFIG_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor/share/gz:/opt/ros/jazzy/opt/sdformat_vendor/share/gz:/opt/ros/jazzy/opt/gz_gui_vendor/share/gz:/opt/ros/jazzy/opt/gz_transport_vendor/share/gz:/opt/ros/jazzy/opt/gz_rendering_vendor/share/gz:/opt/ros/jazzy/opt/gz_plugin_vendor/share/gz:/opt/ros/jazzy/opt/gz_fuel_tools_vendor/share/gz:/opt/ros/jazzy/opt/gz_msgs_vendor/share/gz:/opt/ros/jazzy/opt/gz_common_vendor/share/gz', 'XDG_SESSION_TYPE': 'wayland', 'SHLVL': '1', 'LD_LIBRARY_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor/lib:/opt/ros/jazzy/opt/gz_sensors_vendor/lib:/opt/ros/jazzy/opt/gz_physics_vendor/lib:/opt/ros/jazzy/opt/sdformat_vendor/lib:/opt/ros/jazzy/opt/rviz_ogre_vendor/lib:/opt/ros/jazzy/lib/x86_64-linux-gnu:/opt/ros/jazzy/opt/gz_gui_vendor/lib:/opt/ros/jazzy/opt/gz_transport_vendor/lib:/opt/ros/jazzy/opt/gz_rendering_vendor/lib:/opt/ros/jazzy/opt/gz_plugin_vendor/lib:/opt/ros/jazzy/opt/gz_fuel_tools_vendor/lib:/opt/ros/jazzy/opt/gz_msgs_vendor/lib:/opt/ros/jazzy/opt/gz_common_vendor/lib:/opt/ros/jazzy/opt/gz_math_vendor/lib:/opt/ros/jazzy/opt/gz_utils_vendor/lib:/opt/ros/jazzy/opt/gz_tools_vendor/lib:/opt/ros/jazzy/opt/gz_ogre_next_vendor/lib:/opt/ros/jazzy/opt/gz_dartsim_vendor/lib:/opt/ros/jazzy/opt/gz_cmake_vendor/lib:/opt/ros/jazzy/lib', 'HOME': '/home/febryan', 'OLDPWD': '/home/febryan/febryan_ws', 'DESKTOP_SESSION': 'ubuntu', 'ROS_PYTHON_VERSION': '3', 'GNOME_SHELL_SESSION_MODE': 'ubuntu', 'GTK_MODULES': 'gail:atk-bridge', 'SYSTEMD_EXEC_PID': '2175', 'GSM_SKIP_SSH_AGENT_WORKAROUND': 'true', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus', 'COLORTERM': 'truecolor', 'GNOME_KEYRING_CONTROL': '/run/user/1000/keyring', 'DEBUGINFOD_URLS': 'https://debuginfod.ubuntu.com', 'IM_CONFIG_PHASE': '1', 'WAYLAND_DISPLAY': 'wayland-0', 'ROS_DISTRO': 'jazzy', 'LOGNAME': 'febryan', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'MEMORY_PRESSURE_WATCH': '/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.SettingsDaemon.MediaKeys.service/memory.pressure', 'XDG_SESSION_CLASS': 'user', 'USERNAME': 'febryan', 'TERM': 'xterm-256color', 'GNOME_DESKTOP_SESSION_ID': 'this-is-deprecated', 'PATH': '/opt/ros/jazzy/opt/gz_msgs_vendor/bin:/opt/ros/jazzy/opt/gz_tools_vendor/bin:/opt/ros/jazzy/opt/gz_ogre_next_vendor/bin:/opt/ros/jazzy/bin:/usr/local/MATLAB/R2025b/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin', 'SESSION_MANAGER': 'local/gerald:@/tmp/.ICE-unix/1955,unix/gerald:/tmp/.ICE-unix/1955', 'XDG_MENU_PREFIX': 'gnome-', 'GNOME_TERMINAL_SCREEN': '/org/gnome/Terminal/screen/779f8231_9a78_4aee_b1c6_2c0e9b691a10', 'GNOME_SETUP_DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'DISPLAY': ':0', 'LANG': 'en_US.UTF-8', 'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'XMODIFIERS': '@im=ibus', 'XDG_SESSION_DESKTOP': 'ubuntu', 'XAUTHORITY': '/run/user/1000/.mutter-Xwaylandauth.VP8SK3', 'LS_COLORS': 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.crdownload=00;90:*.dpkg-dist=00;90:*.dpkg-new=00;90:*.dpkg-old=00;90:*.dpkg-tmp=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:*.swp=00;90:*.tmp=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:', 'GNOME_TERMINAL_SERVICE': ':1.117', 'SSH_AUTH_SOCK': '/run/user/1000/keyring/ssh', 'AMENT_PREFIX_PATH': '/opt/ros/jazzy', 'SHELL': '/bin/bash', 'QT_ACCESSIBILITY': '1', 'GDMSESSION': 'ubuntu', 'LESSCLOSE': '/usr/bin/lesspipe %s %s', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'QT_IM_MODULE': 'ibus', 'PWD': '/home/febryan/febryan_ws/build/kinect_ros2', 'LC_ALL': 'en_US.UTF-8', 'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/etc/xdg', 'XDG_DATA_DIRS': '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop', 'PYTHONPATH': '/opt/ros/jazzy/lib/python3.12/site-packages', 'COLCON': '1', 'MEMORY_PRESSURE_WRITE': 'c29tZSAyMDAwMDAgMjAwMDAwMAA=', 'VTE_VERSION': '7600', 'CMAKE_PREFIX_PATH': '/opt/ros/jazzy/opt/gz_sim_vendor:/opt/ros/jazzy/opt/gz_sensors_vendor:/opt/ros/jazzy/opt/gz_physics_vendor:/opt/ros/jazzy/opt/sdformat_vendor:/opt/ros/jazzy/opt/gz_gui_vendor:/opt/ros/jazzy/opt/gz_transport_vendor:/opt/ros/jazzy/opt/gz_rendering_vendor:/opt/ros/jazzy/opt/gz_plugin_vendor:/opt/ros/jazzy/opt/gz_fuel_tools_vendor:/opt/ros/jazzy/opt/gz_msgs_vendor:/opt/ros/jazzy/opt/gz_common_vendor:/opt/ros/jazzy/opt/gz_math_vendor:/opt/ros/jazzy/opt/gz_utils_vendor:/opt/ros/jazzy/opt/gz_tools_vendor:/opt/ros/jazzy/opt/gz_ogre_next_vendor:/opt/ros/jazzy/opt/gz_dartsim_vendor:/opt/ros/jazzy/opt/gz_cmake_vendor:/opt/ros/jazzy'}), 'shell': False}
+[16.642525] (kinect_ros2) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[16.642768] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/lib/libkinect_ros2_component.so\n'}
+[16.644817] (kinect_ros2) StdoutLine: {'line': b'-- Set non-toolchain portion of runtime path of "/home/febryan/febryan_ws/install/kinect_ros2/lib/libkinect_ros2_component.so" to ""\n'}
+[16.644971] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/lib/kinect_ros2/kinect_ros2_node\n'}
+[16.646726] (kinect_ros2) StdoutLine: {'line': b'-- Set non-toolchain portion of runtime path of "/home/febryan/febryan_ws/install/kinect_ros2/lib/kinect_ros2/kinect_ros2_node" to ""\n'}
+[16.646876] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/cfg\n'}
+[16.647095] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/cfg/calibration_depth.yaml\n'}
+[16.647323] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/cfg/calibration_rgb.yaml\n'}
+[16.647629] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/launch\n'}
+[16.647765] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/launch/pointcloud.launch.py\n'}
+[16.647911] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/launch/showimage.launch.py\n'}
+[16.648033] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/rviz\n'}
+[16.648172] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/rviz/pointcloud.rviz\n'}
+[16.648349] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/ament_index/resource_index/package_run_dependencies/kinect_ros2\n'}
+[16.648678] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/ament_index/resource_index/parent_prefix_path/kinect_ros2\n'}
+[16.648974] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/environment/ament_prefix_path.sh\n'}
+[16.649188] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/environment/ament_prefix_path.dsv\n'}
+[16.649413] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/environment/path.sh\n'}
+[16.649655] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/environment/path.dsv\n'}
+[16.649880] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/local_setup.bash\n'}
+[16.650104] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/local_setup.sh\n'}
+[16.650349] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/local_setup.zsh\n'}
+[16.650606] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/local_setup.dsv\n'}
+[16.650910] (kinect_ros2) StdoutLine: {'line': b'-- Up-to-date: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/package.dsv\n'}
+[16.651050] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/ament_index/resource_index/packages/kinect_ros2\n'}
+[16.651324] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/ament_index/resource_index/rclcpp_components/kinect_ros2\n'}
+[16.651635] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/cmake/kinect_ros2Config.cmake\n'}
+[16.651820] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/cmake/kinect_ros2Config-version.cmake\n'}
+[16.652036] (kinect_ros2) StdoutLine: {'line': b'-- Installing: /home/febryan/febryan_ws/install/kinect_ros2/share/kinect_ros2/package.xml\n'}
+[16.654681] (kinect_ros2) CommandEnded: {'returncode': 0}
+[16.656090] (-) TimerEvent: {}
+[16.680191] (kinect_ros2) JobEnded: {'identifier': 'kinect_ros2', 'rc': 0}
+[16.681266] (-) EventReactorShutdown: {}

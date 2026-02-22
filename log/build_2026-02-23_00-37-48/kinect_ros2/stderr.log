@@ -1,0 +1,16 @@
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:[m[K In static member function ‘[01m[Kstatic void kinect_ros2::KinectRosComponent::[01;32m[Kdepth_cb[m[K(freenect_device*, void*, uint32_t)[m[K’:
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:109:53:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Kdev[m[K’ [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter-Wunused-parameter]8;;[m[K]
+  109 | void KinectRosComponent::depth_cb([01;35m[Kfreenect_device * dev[m[K, void * depth_ptr, uint32_t timestamp)
+      |                                   [01;35m[K~~~~~~~~~~~~~~~~~~^~~[m[K
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:109:85:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Ktimestamp[m[K’ [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter-Wunused-parameter]8;;[m[K]
+  109 | ctRosComponent::depth_cb(freenect_device * dev, void * depth_ptr, [01;35m[Kuint32_t timestamp[m[K)
+      |                                                                   [01;35m[K~~~~~~~~~^~~~~~~~~[m[K
+
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:[m[K In static member function ‘[01m[Kstatic void kinect_ros2::KinectRosComponent::[01;32m[Krgb_cb[m[K(freenect_device*, void*, uint32_t)[m[K’:
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:123:51:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Kdev[m[K’ [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter-Wunused-parameter]8;;[m[K]
+  123 | void KinectRosComponent::rgb_cb([01;35m[Kfreenect_device * dev[m[K, void * rgb_ptr, uint32_t timestamp)
+      |                                 [01;35m[K~~~~~~~~~~~~~~~~~~^~~[m[K
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:123:81:[m[K [01;35m[Kwarning: [m[Kunused parameter ‘[01m[Ktimestamp[m[K’ [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-parameter-Wunused-parameter]8;;[m[K]
+  123 | KinectRosComponent::rgb_cb(freenect_device * dev, void * rgb_ptr, [01;35m[Kuint32_t timestamp[m[K)
+      |                                                                   [01;35m[K~~~~~~~~~^~~~~~~~~[m[K
+

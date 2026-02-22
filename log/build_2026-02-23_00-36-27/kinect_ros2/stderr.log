@@ -1,0 +1,8 @@
+In file included from [01m[K/home/febryan/febryan_ws/src/kinect_ros2/src/kinect_ros2_component.cpp:1[m[K:
+[01m[K/home/febryan/febryan_ws/src/kinect_ros2/include/kinect_ros2/kinect_ros2_component.hpp:12:10:[m[K [01;31m[Kfatal error: [m[Kcv_bridge/cv_bridge.h: No such file or directory
+   12 | #include [01;31m[K"cv_bridge/cv_bridge.h"[m[K
+      |          [01;31m[K^~~~~~~~~~~~~~~~~~~~~~~[m[K
+compilation terminated.
+gmake[2]: *** [CMakeFiles/kinect_ros2_component.dir/build.make:76: CMakeFiles/kinect_ros2_component.dir/src/kinect_ros2_component.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:139: CMakeFiles/kinect_ros2_component.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

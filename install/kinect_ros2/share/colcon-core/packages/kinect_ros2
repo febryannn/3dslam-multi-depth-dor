@@ -1,0 +1,1 @@
+camera_info_manager:cv_bridge:depth_image_proc:image_tools:image_transport:libfreenect:rclcpp:sensor_msgs

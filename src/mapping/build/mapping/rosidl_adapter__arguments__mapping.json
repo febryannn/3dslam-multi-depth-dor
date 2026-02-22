@@ -1,0 +1,6 @@
+{
+  "package_name": "mapping",
+  "non_idl_tuples": [
+    "/home/febryan/agv_ros2_ws/src/mapping:srv/InputPos.srv"
+  ]
+}

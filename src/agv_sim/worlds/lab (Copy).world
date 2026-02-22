@@ -1,0 +1,56 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="complex_lab">
+    
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision"><geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry></collision>
+        <visual name="visual"><geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry><material><ambient>0.8 0.8 0.8 1</ambient></material></visual>
+      </link>
+    </model>
+
+    <model name="walls">
+      <static>true</static>
+      <link name="wall_north"><pose>0 5 1 0 0 0</pose><collision name="c"><geometry><box size="10 0.2 2"/></geometry></collision><visual name="v"><geometry><box size="10 0.2 2"/></geometry><material><ambient>0.3 0.3 0.8 1</ambient></material></visual></link>
+      <link name="wall_south"><pose>0 -5 1 0 0 0</pose><collision name="c"><geometry><box size="10 0.2 2"/></geometry></collision><visual name="v"><geometry><box size="10 0.2 2"/></geometry><material><ambient>0.3 0.3 0.8 1</ambient></material></visual></link>
+      <link name="wall_west"><pose>-5 0 1 0 0 0</pose><collision name="c"><geometry><box size="0.2 10 2"/></geometry></collision><visual name="v"><geometry><box size="0.2 10 2"/></geometry><material><ambient>0.3 0.3 0.8 1</ambient></material></visual></link>
+      <link name="wall_east"><pose>5 0 1 0 0 0</pose><collision name="c"><geometry><box size="0.2 10 2"/></geometry></collision><visual name="v"><geometry><box size="0.2 10 2"/></geometry><material><ambient>0.3 0.3 0.8 1</ambient></material></visual></link>
+    </model>
+
+    <model name="obstacles">
+      <static>true</static>
+      <link name="box_1"><pose>2 2 0.5 0 0 0</pose><collision name="c"><geometry><box size="1 1 1"/></geometry></collision><visual name="v"><geometry><box size="1 1 1"/></geometry><material><ambient>0.8 0.2 0.2 1</ambient></material></visual></link>
+      <link name="box_2"><pose>-2 -2 0.5 0 0 0</pose><collision name="c"><geometry><box size="1.2 0.5 1"/></geometry></collision><visual name="v"><geometry><box size="1.2 0.5 1"/></geometry><material><ambient>0.2 0.8 0.2 1</ambient></material></visual></link>
+      <link name="cylinder_1"><pose>0 3 0.5 0 0 0</pose><collision name="c"><geometry><cylinder radius="0.5" length="1"/></geometry></collision><visual name="v"><geometry><cylinder radius="0.5" length="1"/></geometry><material><ambient>0.8 0.8 0.2 1</ambient></material></visual></link>
+    </model>
+
+    <actor name="actor_walking">
+      <skin>
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+      </skin>
+      <animation name="walking">
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+           <waypoint><time>0</time><pose>3 -3 0 0 0 1.57</pose></waypoint>
+           <waypoint><time>4</time><pose>3 3 0 0 0 3.14</pose></waypoint>
+           <waypoint><time>8</time><pose>-3 3 0 0 0 -1.57</pose></waypoint>
+           <waypoint><time>12</time><pose>-3 -3 0 0 0 0</pose></waypoint>
+           <waypoint><time>16</time><pose>3 -3 0 0 0 1.57</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+  </world>
+</sdf>

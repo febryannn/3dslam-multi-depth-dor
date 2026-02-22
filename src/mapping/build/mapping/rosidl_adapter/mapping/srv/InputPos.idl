@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from mapping/srv/InputPos.srv
+// generated code does not contain a copyright notice
+
+
+module mapping {
+  module srv {
+    struct InputPos_Request {
+      float posx;
+
+      float posy;
+
+      float posw;
+    };
+    struct InputPos_Response {
+      boolean status_pos;
+    };
+  };
+};

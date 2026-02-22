@@ -1,0 +1,5 @@
+<launch>
+    <arg name="INDOOR_GPS_PORT"  default="/dev/ttyACM-INDOOR_GPS"/>
+
+    <node pkg="marvelmind_nav" name="hedge_rcv_bin" type="hedge_rcv_bin"  args="$(arg INDOOR_GPS_PORT)" output="log"/>
+</launch>
