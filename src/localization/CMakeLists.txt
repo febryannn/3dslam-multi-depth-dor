@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(udp_bot_msgs REQUIRED)
 find_package(marvelmind_msgs REQUIRED)
@@ -19,7 +20,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation registration)
-find_package(octomap REQUIRED) # WAJIB UNTUK OCTOMAP
+find_package(octomap REQUIRED)
 
 # Include directories dan definisi PCL & Octomap
 include_directories(
@@ -55,15 +56,15 @@ ament_target_dependencies(recording_node rclcpp geometry_msgs udp_bot_msgs marve
 add_executable(slam_listen_node src/slam_listen.cpp)
 ament_target_dependencies(slam_listen_node rclcpp geometry_msgs udp_bot_msgs marvelmind_msgs tf2 tf2_ros tf2_geometry_msgs)
 
-# 7. SLAM RGBD Cam Node (Ditambahkan Library Octomap)
+# 7. SLAM RGBD Cam Node (GICP + OctoMap + Keyframe Management)
 add_executable(slam_rgbd_cam_node src/slam_rgbd_cam.cpp)
-target_link_libraries(slam_rgbd_cam_node ${PCL_LIBRARIES} ${OCTOMAP_LIBRARIES}) # Tambahan Octomap Libraries
-ament_target_dependencies(slam_rgbd_cam_node rclcpp sensor_msgs nav_msgs udp_bot_msgs tf2 tf2_ros tf2_geometry_msgs pcl_conversions)
+target_link_libraries(slam_rgbd_cam_node ${PCL_LIBRARIES} ${OCTOMAP_LIBRARIES})
+ament_target_dependencies(slam_rgbd_cam_node rclcpp sensor_msgs geometry_msgs nav_msgs std_srvs tf2 tf2_ros tf2_geometry_msgs pcl_conversions)
 
-# 8. RGBD Cam Localization Node
+# 8. RGBD Cam Localization Node (ICP-based localization vs pre-built map)
 add_executable(rgbd_cam_loc_node src/rgbd_cam_loc.cpp)
 target_link_libraries(rgbd_cam_loc_node ${PCL_LIBRARIES})
-ament_target_dependencies(rgbd_cam_loc_node rclcpp sensor_msgs nav_msgs udp_bot_msgs tf2 tf2_ros tf2_geometry_msgs pcl_conversions)
+ament_target_dependencies(rgbd_cam_loc_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs pcl_conversions)
 
 # Node Penerima UDP Odometry
 add_executable(udp_receiver src/udp_receiver.cpp)
