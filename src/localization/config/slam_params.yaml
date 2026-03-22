@@ -12,16 +12,16 @@ slam_rgbd_cam:
     map_voxel_leaf_size: 0.08 # Resolusi voxel untuk map (meter)
     crop_min_z: -0.3         # Batas bawah Z (tangkap lantai)
     crop_max_z: 2.5          # Batas atas Z
-    self_filter_size: 0.6    # Ukuran self-filter (hapus titik robot sendiri)
+    self_filter_size: 0.5    # Ukuran self-filter (hapus titik robot sendiri)
     sor_mean_k: 30           # Statistical Outlier Removal - jumlah tetangga
     sor_stddev: 1.0          # Statistical Outlier Removal - threshold std dev
 
     # === Scan Matching ===
     use_ndt: false           # true = NDT, false = GICP
-    gicp_max_corr_dist: 1.0  # Jarak korespondensi maksimum GICP (meter)
-    gicp_max_iterations: 50  # Iterasi maksimum GICP
+    gicp_max_corr_dist: 2.0  # Jarak korespondensi maksimum GICP (meter)
+    gicp_max_iterations: 64  # Iterasi maksimum GICP
     gicp_transform_epsilon: 1.0e-6  # Epsilon konvergensi transformasi
-    gicp_fitness_threshold: 0.5     # Threshold fitness score (tolak jika lebih tinggi)
+    gicp_fitness_threshold: 1.0     # Threshold fitness score (tolak jika lebih tinggi)
     ndt_step_size: 0.1       # NDT step size
     ndt_resolution: 1.0      # NDT grid resolution
 

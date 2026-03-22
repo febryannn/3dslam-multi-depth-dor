@@ -53,12 +53,20 @@
   <xacro:caster name="front_caster" x="0.3"/>
   <xacro:caster name="rear_caster" x="-0.3"/>
 
+  <!-- Parent frame untuk semua kamera -->
+  <link name="camera_link"/>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
   <xacro:macro name="kinect_v1" params="name x y yaw topic">
     <link name="${name}_link">
       <visual><geometry><box size="0.05 0.12 0.04"/></geometry><material name="blue"><color rgba="0 0 0.8 1"/></material></visual>
     </link>
     <joint name="${name}_joint" type="fixed">
-      <parent link="base_link"/><child link="${name}_link"/><origin xyz="${x} ${y} 0.4" rpy="0 0 ${yaw}"/>
+      <parent link="camera_link"/><child link="${name}_link"/><origin xyz="${x} ${y} 0.4" rpy="0 0 ${yaw}"/>
     </joint>
     <gazebo reference="${name}_link">
       <sensor name="${name}" type="depth_camera">

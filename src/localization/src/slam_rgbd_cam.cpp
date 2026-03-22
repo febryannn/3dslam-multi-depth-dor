@@ -200,10 +200,25 @@ private:
     // ======== Point Cloud Merging (4 Kamera → 1 Cloud) ========
 
     Eigen::Affine3f makeCameraTransform(float x, float y, float yaw) {
+        // Transform kamera: posisi + yaw di base_link
         Eigen::Affine3f t = Eigen::Affine3f::Identity();
         t.translation() << x, y, sensor_height_;
         t.rotate(Eigen::AngleAxisf(yaw, Eigen::Vector3f::UnitZ()));
-        return t;
+
+        // Rotasi dari optical frame (Gazebo depth camera convention)
+        // Optical: Z=forward(depth), X=right, Y=down
+        // Base:    X=forward, Y=left, Z=up
+        //   x_base =  z_optical
+        //   y_base = -x_optical
+        //   z_base = -y_optical
+        Eigen::Affine3f optical_to_base = Eigen::Affine3f::Identity();
+        Eigen::Matrix3f R;
+        R <<  0,  0, 1,
+             -1,  0, 0,
+              0, -1, 0;
+        optical_to_base.linear() = R;
+
+        return t * optical_to_base;
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr mergeCameras(
@@ -552,9 +567,23 @@ private:
                 RCLCPP_DEBUG(this->get_logger(), "GICP converged. Fitness: %.4f | Keyframes: %zu",
                              fitness_score, keyframes_.size());
             } else {
-                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 3000,
-                    "Scan matching gagal atau fitness terlalu tinggi (%.4f). Menggunakan odometri saja.",
-                    fitness_score);
+                // Fallback: gunakan odometri untuk estimasi pose
+                Eigen::Matrix4f pose_in_map = map_to_odom_ * odom_transform.matrix();
+
+                // Tetap tambahkan keyframe agar map terus tumbuh
+                if (isKeyframe(pose_in_map)) {
+                    addKeyframe(current_cloud, pose_in_map);
+
+                    PointCloudT::Ptr cloud_in_map(new PointCloudT());
+                    pcl::transformPointCloud(*current_cloud, *cloud_in_map, pose_in_map);
+                    performRaycasting(cloud_in_map, pose_in_map);
+                }
+
+                addPoseToPath(pose_in_map, msg->header.stamp);
+
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                    "Scan matching fitness tinggi (%.4f > %.4f). Menggunakan odometri + tetap mapping.",
+                    fitness_score, gicp_fitness_threshold_);
             }
         }
 
