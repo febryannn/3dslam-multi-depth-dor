@@ -119,7 +119,6 @@ def generate_launch_description():
             'use_sim_time': True,
         }],
         output='screen',
-        remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
     )
 
     # === 4. ROS <-> Gazebo Bridge ===

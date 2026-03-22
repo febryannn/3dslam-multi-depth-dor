@@ -15,8 +15,8 @@ slam_rgbd_cam:
     # === Filtering ===
     vg_size_for_input: 0.1            # Voxel grid untuk input cloud (meter)
     vg_size_for_map: 0.05             # Voxel grid untuk map cloud (meter)
-    scan_min_range: 0.1               # Jarak minimum valid (meter)
-    scan_max_range: 10.5              # Jarak maksimum valid (meter)
+    scan_min_range: 0.8               # Jarak minimum valid (meter) - Kinect V1
+    scan_max_range: 4.5               # Jarak maksimum valid (meter) - Kinect V1
     crop_min_z: -0.3                  # Batas bawah Z
     crop_max_z: 2.5                   # Batas atas Z
 

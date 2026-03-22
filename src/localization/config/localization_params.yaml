@@ -9,7 +9,7 @@ rgbd_cam_loc:
     # === Filtering ===
     voxel_leaf_size: 0.06
     map_voxel_leaf_size: 0.1
-    max_cam_d: 10.5
+    max_cam_d: 4.5
     crop_min_z: -0.3
     crop_max_z: 2.5
     self_filter_size: 0.6

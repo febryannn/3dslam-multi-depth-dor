@@ -59,7 +59,6 @@ def generate_launch_description():
             'robot_description': Command(['xacro', ' ', urdf_file]),
             'use_sim_time': True,
         }],
-        remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')]
     )
 
     gz_bridge = Node(
