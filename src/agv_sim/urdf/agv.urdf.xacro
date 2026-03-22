@@ -13,7 +13,7 @@
 
   <link name="base_link">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/> 
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry><mesh filename="file://$(find agv_sim)/meshes/agv_acs.stl" scale="0.001 0.001 0.001"/></geometry>
       <material name="grey"><color rgba="0.5 0.5 0.5 1.0"/></material>
     </visual>
@@ -53,18 +53,43 @@
   <xacro:caster name="front_caster" x="0.3"/>
   <xacro:caster name="rear_caster" x="-0.3"/>
 
+  <!-- Parent frame untuk semua kamera -->
+  <link name="camera_link"/>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!--
+    Macro kamera RGBD dengan optical frame.
+    Gazebo depth camera menghasilkan point cloud dalam optical frame convention
+    (Z=forward/depth, X=right, Y=down). Optical frame link ditambahkan agar
+    TF2 bisa transformasi langsung ke base_link dengan benar.
+  -->
   <xacro:macro name="kinect_v1" params="name x y yaw topic">
+    <!-- Link fisik kamera -->
     <link name="${name}_link">
       <visual><geometry><box size="0.05 0.12 0.04"/></geometry><material name="blue"><color rgba="0 0 0.8 1"/></material></visual>
     </link>
     <joint name="${name}_joint" type="fixed">
-      <parent link="base_link"/><child link="${name}_link"/><origin xyz="${x} ${y} 0.4" rpy="0 0 ${yaw}"/>
+      <parent link="camera_link"/><child link="${name}_link"/><origin xyz="${x} ${y} 0.4" rpy="0 0 ${yaw}"/>
     </joint>
+
+    <!-- Optical frame: rotasi dari link frame (x-forward,y-left,z-up) ke optical (z-forward,x-right,y-down) -->
+    <link name="${name}_optical"/>
+    <joint name="${name}_optical_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${name}_optical"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
     <gazebo reference="${name}_link">
       <sensor name="${name}" type="depth_camera">
         <update_rate>20</update_rate>
         <topic>${topic}</topic>
-        <gz_frame_id>${name}_link</gz_frame_id>
+        <!-- Publish point cloud dalam optical frame agar TF2 bisa transform ke base_link -->
+        <gz_frame_id>${name}_optical</gz_frame_id>
         <camera><horizontal_fov>1.047</horizontal_fov><image><width>640</width><height>480</height></image><clip><near>0.5</near><far>8.0</far></clip></camera>
       </sensor>
     </gazebo>
