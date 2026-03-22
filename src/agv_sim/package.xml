@@ -9,18 +9,13 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>ros_gz</depend>
-  <depend>geometry_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>xacro</depend>
-  <depend>pointcloud_concatenate</depend>
-  <depend>localization</depend>
-  <depend>tf2_ros</depend>
-  <depend>robot_state_publisher</depend>
-  <depend>agv_robot_description</depend>
-  <depend>agv_robot_gazebo</depend>
+  <exec_depend>ros_gz</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>pointcloud_concatenate</exec_depend>
+  <exec_depend>localization</exec_depend>
+  <exec_depend>agv_robot_description</exec_depend>
+  <exec_depend>agv_robot_gazebo</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
