@@ -21,19 +21,20 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
-import xacro
 
 
 def generate_launch_description():
     pkg_agv_sim = get_package_share_directory('agv_sim')
+    pkg_description = get_package_share_directory('agv_robot_description')
+    pkg_gazebo = get_package_share_directory('agv_robot_gazebo')
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
     pkg_localization = get_package_share_directory('localization')
 
     # Arguments
     declare_world = DeclareLaunchArgument(
-        'world', default_value='complex_lab.world')
+        'world', default_value='myworld.world')
     declare_pcd_path = DeclareLaunchArgument(
         'pcd_path', default_value='/tmp/slam_map.pcd',
         description='Path ke PCD map file hasil SLAM')
@@ -47,38 +48,49 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration('use_rviz')
     use_teleop = LaunchConfiguration('use_teleop')
 
-    # URDF
-    xacro_file = os.path.join(pkg_agv_sim, 'urdf', 'agv.urdf.xacro')
-    robot_desc = xacro.process_file(xacro_file).toxml()
+    # URDF from agv_robot_description
+    urdf_file = os.path.join(pkg_description, 'urdf', 'robots', 'robot_3d.urdf.xacro')
 
     # Paths
     rviz_config = os.path.join(pkg_agv_sim, 'rviz', 'slam_config.rviz')
     loc_config = os.path.join(pkg_localization, 'config', 'localization_params.yaml')
-    world_file = os.path.join(pkg_agv_sim, 'worlds')
+    world_dir = os.path.join(pkg_gazebo, 'worlds')
 
     # Gazebo
     set_gz_resource = AppendEnvironmentVariable(
         name='GZ_SIM_RESOURCE_PATH',
-        value=[os.path.join(pkg_agv_sim, '..')]
+        value=[os.path.join(pkg_description, '..')]
     )
 
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
         launch_arguments={
-            'gz_args': ['-r ', world_file, '/', world_name],
+            'gz_args': ['-r ', world_dir, '/', world_name],
+            'on_exit_shutdown': 'true',
         }.items(),
     )
 
     spawn_robot = Node(
         package='ros_gz_sim', executable='create',
-        arguments=['-string', robot_desc, '-name', 'agv_robot', '-z', '0.2'],
-        output='screen')
+        arguments=[
+            '-name', 'agv_robot',
+            '-topic', 'robot_description',
+            '-x', '0.0', '-y', '-2.0', '-z', '0.5', '-Y', '1.59',
+        ],
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
 
     rsp = Node(
         package='robot_state_publisher', executable='robot_state_publisher',
-        parameters=[{'robot_description': robot_desc, 'use_sim_time': True}],
-        output='screen')
+        parameters=[{
+            'robot_description': Command(['xacro', ' ', urdf_file]),
+            'use_sim_time': True,
+        }],
+        output='screen',
+        remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
+    )
 
     bridge = Node(
         package='ros_gz_bridge', executable='parameter_bridge',
@@ -88,18 +100,16 @@ def generate_launch_description():
             '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
             '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
-            '/cloud_in1/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in2/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in3/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in4/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_front/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_back/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_left/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_right/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
         ],
-        output='screen')
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
 
-    odom_relay = Node(
-        package='agv_sim', executable='odom_to_udp_relay',
-        parameters=[{'use_sim_time': True}], output='screen')
-
-    # Localization Node (bukan SLAM)
+    # Localization Node
     loc_node = TimerAction(
         period=3.0,
         actions=[
@@ -119,7 +129,7 @@ def generate_launch_description():
         ],
     )
 
-    # PointCloud to Grid (menggunakan map dari localization)
+    # PointCloud to Grid
     pc2grid = TimerAction(
         period=4.0,
         actions=[
@@ -161,7 +171,6 @@ def generate_launch_description():
         spawn_robot,
         rsp,
         bridge,
-        odom_relay,
         loc_node,
         pc2grid,
         rviz_node,
