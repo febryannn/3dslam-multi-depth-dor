@@ -77,10 +77,13 @@ def generate_launch_description():
         package='agv_sim', executable='odom_to_udp_relay',
         parameters=[{'use_sim_time': True}], output='screen')
 
+    pkg_localization = get_package_share_directory('localization')
+    slam_config = os.path.join(pkg_localization, 'config', 'slam_params.yaml')
+
     slam = Node(
         package='localization', executable='slam_rgbd_cam_node',
         name='slam_rgbd_cam',
-        parameters=[{'use_sim_time': True, 'min_cam_d': 0.6, 'max_cam_d': 8.0}],
+        parameters=[slam_config, {'use_sim_time': True}],
         output='screen')
 
     # RViz & Teleop
