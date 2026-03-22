@@ -1,5 +1,0 @@
-float32 posx
-float32 posy
-float32 posw
----
-bool status_pos
