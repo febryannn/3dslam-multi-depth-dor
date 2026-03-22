@@ -4,12 +4,12 @@
 =================================================================
 
   Pipeline:
-    1. Gazebo Harmonic + AGV robot (4 depth cameras)
+    1. Gazebo Harmonic + AGV robot (4 RGBD cameras from agv_robot_description)
     2. ROS-Gazebo Bridge (clock, odom, cmd_vel, 4x point cloud)
-    3. Robot State Publisher (URDF → TF tree termasuk optical frames)
-    4. PointCloud Concatenate (merge 4 kamera via TF2 → /full_pointcloud)
+    3. Robot State Publisher (URDF -> TF tree)
+    4. PointCloud Concatenate (merge 4 kamera via TF2 -> /full_pointcloud)
     5. 3D SLAM Node (scan-to-submap matching, arsitektur lidarslam_ros2)
-    6. PointCloud → 2D Grid (untuk navigasi)
+    6. PointCloud -> 2D Grid (untuk navigasi)
     7. RViz2 + Teleop
 
   Penggunaan:
@@ -30,20 +30,22 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from launch_ros.actions import Node
-import xacro
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     # === Package paths ===
     pkg_agv_sim = get_package_share_directory('agv_sim')
+    pkg_description = get_package_share_directory('agv_robot_description')
+    pkg_gazebo = get_package_share_directory('agv_robot_gazebo')
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
     pkg_localization = get_package_share_directory('localization')
 
     # === Launch Arguments ===
     declare_world = DeclareLaunchArgument(
-        'world', default_value='complex_lab.world',
+        'world', default_value='myworld.world',
         description='World file')
 
     declare_headless = DeclareLaunchArgument(
@@ -74,24 +76,24 @@ def generate_launch_description():
     slam_config = LaunchConfiguration('slam_config')
     map_save_path = LaunchConfiguration('map_save_path')
 
-    # === URDF ===
-    xacro_file = os.path.join(pkg_agv_sim, 'urdf', 'agv.urdf.xacro')
-    robot_desc = xacro.process_file(xacro_file).toxml()
+    # === URDF from agv_robot_description ===
+    urdf_file = os.path.join(pkg_description, 'urdf', 'robots', 'robot_3d.urdf.xacro')
 
     rviz_config = os.path.join(pkg_agv_sim, 'rviz', 'slam_config.rviz')
-    world_file = os.path.join(pkg_agv_sim, 'worlds')
+    world_dir = os.path.join(pkg_gazebo, 'worlds')
 
     # === 1. Gazebo ===
     set_gz_resource = AppendEnvironmentVariable(
         name='GZ_SIM_RESOURCE_PATH',
-        value=[os.path.join(pkg_agv_sim, '..')]
+        value=[os.path.join(pkg_description, '..')]
     )
 
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
         launch_arguments={
-            'gz_args': ['-r ', world_file, '/', world_name],
+            'gz_args': ['-r ', world_dir, '/', world_name],
+            'on_exit_shutdown': 'true',
         }.items(),
     )
 
@@ -100,25 +102,27 @@ def generate_launch_description():
         package='ros_gz_sim',
         executable='create',
         arguments=[
-            '-string', robot_desc,
             '-name', 'agv_robot',
-            '-x', '0.0', '-y', '0.0', '-z', '0.2',
+            '-topic', 'robot_description',
+            '-x', '0.0', '-y', '-2.0', '-z', '0.5', '-Y', '1.59',
         ],
         output='screen',
+        parameters=[{'use_sim_time': True}],
     )
 
-    # === 3. Robot State Publisher (TF tree termasuk optical frames) ===
+    # === 3. Robot State Publisher ===
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         parameters=[{
-            'robot_description': robot_desc,
+            'robot_description': Command(['xacro', ' ', urdf_file]),
             'use_sim_time': True,
         }],
         output='screen',
     )
 
-    # === 4. ROS ↔ Gazebo Bridge ===
+    # === 4. ROS <-> Gazebo Bridge ===
+    # Topics: clock, cmd_vel, odom, tf, joint_states, 4x point clouds
     ros_gz_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -128,16 +132,16 @@ def generate_launch_description():
             '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
             '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
-            '/cloud_in1/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in2/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in3/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
-            '/cloud_in4/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_front/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_back/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_left/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
+            '/cam_right/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
         ],
         output='screen',
+        parameters=[{'use_sim_time': True}],
     )
 
     # === 5. PointCloud Concatenate (merge 4 kamera via TF2) ===
-    # Menggunakan TF2 untuk transform dari optical frame → base_link
     pointcloud_concat = TimerAction(
         period=2.0,
         actions=[
@@ -146,10 +150,10 @@ def generate_launch_description():
                 executable='pointcloud_concatenate_node',
                 name='pointcloud_concatenate',
                 remappings=[
-                    ('cloud_in1', '/cloud_in1/points'),
-                    ('cloud_in2', '/cloud_in2/points'),
-                    ('cloud_in3', '/cloud_in3/points'),
-                    ('cloud_in4', '/cloud_in4/points'),
+                    ('cloud_in1', '/cam_front/points'),
+                    ('cloud_in2', '/cam_back/points'),
+                    ('cloud_in3', '/cam_left/points'),
+                    ('cloud_in4', '/cam_right/points'),
                 ],
                 parameters=[{
                     'use_sim_time': True,
@@ -182,7 +186,7 @@ def generate_launch_description():
         ],
     )
 
-    # === 7. PointCloud → 2D Grid ===
+    # === 7. PointCloud -> 2D Grid ===
     pointcloud_to_grid = TimerAction(
         period=5.0,
         actions=[
@@ -208,15 +212,7 @@ def generate_launch_description():
         ],
     )
 
-    # === 8. Odom Relay ===
-    odom_relay = Node(
-        package='agv_sim',
-        executable='odom_to_udp_relay',
-        parameters=[{'use_sim_time': True}],
-        output='screen',
-    )
-
-    # === 9. Teleop ===
+    # === 8. Teleop ===
     teleop = Node(
         package='udp_bot',
         executable='teleop',
@@ -225,7 +221,7 @@ def generate_launch_description():
         condition=IfCondition(use_teleop),
     )
 
-    # === 10. RViz2 ===
+    # === 9. RViz2 ===
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -252,7 +248,6 @@ def generate_launch_description():
         # Infrastructure
         robot_state_publisher,
         ros_gz_bridge,
-        odom_relay,
 
         # Point Cloud Pipeline
         pointcloud_concat,

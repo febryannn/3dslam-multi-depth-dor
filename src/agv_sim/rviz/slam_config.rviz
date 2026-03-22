@@ -52,11 +52,9 @@ Visualization Manager:
           Value: true
         base_link:
           Value: true
-        base_footprint:
-          Value: true
 
     # ==========================================
-    # SLAM MAP - Point Cloud hasil OctoMap (HIJAU)
+    # SLAM MAP - Point Cloud (GREEN)
     # ==========================================
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -76,7 +74,7 @@ Visualization Manager:
       Use Fixed Frame: true
 
     # ==========================================
-    # CURRENT SCAN - Scan saat ini (KUNING)
+    # CURRENT SCAN (YELLOW)
     # ==========================================
     - Alpha: 0.8
       Autocompute Intensity Bounds: true
@@ -96,7 +94,7 @@ Visualization Manager:
       Use Fixed Frame: true
 
     # ==========================================
-    # TRAJECTORY - Jalur robot (MERAH)
+    # TRAJECTORY (RED)
     # ==========================================
     - Class: rviz_default_plugins/Path
       Color: 255; 50; 50
@@ -113,7 +111,7 @@ Visualization Manager:
         Value: Lines
 
     # ==========================================
-    # SLAM POSE - Posisi robot dari SLAM (BIRU)
+    # SLAM POSE (BLUE)
     # ==========================================
     - Class: rviz_default_plugins/Pose
       Color: 0; 100; 255
@@ -131,7 +129,7 @@ Visualization Manager:
         Value: /slam/pose
 
     # ==========================================
-    # OCCUPANCY GRID - 2D map dari pointcloud_to_grid
+    # OCCUPANCY GRID
     # ==========================================
     - Alpha: 0.7
       Class: rviz_default_plugins/Map
@@ -147,7 +145,7 @@ Visualization Manager:
         Value: /height_grid
 
     # ==========================================
-    # MERGED CLOUD - Gabungan 4 kamera (CYAN)
+    # MERGED CLOUD (CYAN) - Debug
     # ==========================================
     - Alpha: 0.6
       Autocompute Intensity Bounds: true
@@ -167,13 +165,13 @@ Visualization Manager:
       Use Fixed Frame: true
 
     # ==========================================
-    # RAW CAMERAS - Bisa di-toggle untuk debug
+    # RAW CAMERAS - Debug
     # ==========================================
     - Alpha: 0.6
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Enabled: false
-      Name: Cam1_Depan (Raw)
+      Name: Cam_Front (Raw)
       Size (Pixels): 1
       Style: Points
       Topic:
@@ -181,12 +179,12 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /cloud_in1/points
+        Value: /cam_front/points
     - Alpha: 0.6
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Enabled: false
-      Name: Cam2_Belakang (Raw)
+      Name: Cam_Back (Raw)
       Size (Pixels): 1
       Style: Points
       Topic:
@@ -194,12 +192,12 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /cloud_in2/points
+        Value: /cam_back/points
     - Alpha: 0.6
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Enabled: false
-      Name: Cam3_Kiri (Raw)
+      Name: Cam_Left (Raw)
       Size (Pixels): 1
       Style: Points
       Topic:
@@ -207,19 +205,20 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /cloud_in3/points
+        Value: /cam_left/points
     - Alpha: 0.6
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Enabled: false
-      Name: Cam4_Kanan (Raw)
+      Name: Cam_Right (Raw)
       Size (Pixels): 1
       Style: Points
       Topic:
         Depth: 1
         Durability Policy: Volatile
-        History Policy: Best Effort
-        Value: /cloud_in4/points
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /cam_right/points
 
   Global Options:
     Background Color: 33; 33; 33
