@@ -1,11 +1,11 @@
 ###############################################
-# Parameter SLAM Node - Scan-to-Submap (lidarslam-style)
+# Parameter SLAM Node - Scan-to-Submap (lidarslam_ros2 architecture)
 ###############################################
 slam_rgbd_cam:
   ros__parameters:
     # === Registration (Scan Matching) ===
     registration_method: "GICP"       # "GICP" atau "NDT"
-    ndt_resolution: 1.0               # NDT grid resolution (meter)
+    ndt_resolution: 5.0               # NDT grid resolution (meter)
     gicp_corr_dist_threshold: 5.0     # GICP max correspondence distance (meter)
 
     # === Submap Management ===
@@ -15,23 +15,35 @@ slam_rgbd_cam:
     # === Filtering ===
     vg_size_for_input: 0.1            # Voxel grid untuk input cloud (meter)
     vg_size_for_map: 0.05             # Voxel grid untuk map cloud (meter)
+    use_min_max_filter: true          # Aktifkan range filter
     scan_min_range: 0.8               # Jarak minimum valid (meter) - Kinect V1
     scan_max_range: 4.5               # Jarak maksimum valid (meter) - Kinect V1
-    crop_min_z: -0.3                  # Batas bawah Z
-    crop_max_z: 2.5                   # Batas atas Z
 
     # === Publishing ===
-    map_publish_period: 5.0           # Interval publish full map (detik)
+    map_publish_period: 15.0          # Interval publish full map (detik)
 
     # === TF & Frames ===
+    publish_tf: true                  # Publish TF
     use_odom: true                    # Gunakan odometry sebagai initial guess
-    publish_tf: true                  # Publish map→odom TF
     global_frame_id: "map"
     robot_frame_id: "base_link"
     odom_frame_id: "odom"
+
+    # === Initial Pose ===
+    set_initial_pose: true            # Set pose awal otomatis
+    initial_pose_x: 0.0
+    initial_pose_y: 0.0
+    initial_pose_z: 0.0
+    initial_pose_qx: 0.0
+    initial_pose_qy: 0.0
+    initial_pose_qz: 0.0
+    initial_pose_qw: 1.0
 
     # === Input ===
     input_cloud_topic: "/full_pointcloud"  # Topic dari pointcloud_concatenate
 
     # === Map Saving ===
     map_save_path: "/tmp/slam_map"    # Path untuk save map (.pcd + _trajectory.txt)
+
+    # === Debug ===
+    debug_flag: false                 # Tampilkan debug info (fitness score, alignment time, dll)

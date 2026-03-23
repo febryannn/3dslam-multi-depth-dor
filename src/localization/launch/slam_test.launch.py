@@ -1,9 +1,16 @@
+"""
+Launch file untuk testing SLAM pipeline dengan pointcloud_concatenate dan UDP bridge.
+
+Penggunaan:
+  ros2 launch localization slam_test.launch.py
+"""
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
+
 def generate_launch_description():
     return LaunchDescription([
-        # 1. Node Penggabung Pointcloud
+        # 1. Node Penggabung Pointcloud (4 kamera -> 1 pointcloud)
         Node(
             package='pointcloud_concatenate',
             executable='pointcloud_concatenate_node',
@@ -16,23 +23,35 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 2. Node SLAM (Localization)
+        # 2. Node SLAM (lidarslam_ros2 architecture)
         Node(
             package='localization',
             executable='slam_rgbd_cam_node',
-            name='slam_node',
+            name='slam_rgbd_cam',
             parameters=[{
-                'min_cam_d': 0.6,
-                'max_cam_d': 8.0
+                'registration_method': 'GICP',
+                'gicp_corr_dist_threshold': 5.0,
+                'trans_for_mapupdate': 0.5,
+                'vg_size_for_input': 0.1,
+                'vg_size_for_map': 0.05,
+                'num_targeted_cloud': 10,
+                'use_min_max_filter': True,
+                'scan_min_range': 0.8,
+                'scan_max_range': 4.5,
+                'set_initial_pose': True,
+                'use_odom': True,
+                'publish_tf': True,
+                'debug_flag': False,
+                'input_cloud_topic': '/full_pointcloud',
             }],
             output='screen'
         ),
 
-        # 3. Node UDP Bridge (Sudah diperbaiki namanya)
+        # 3. Node UDP Receiver (Odometry dari STM32)
         Node(
-            package='udp_bot',
-            executable='udp_bot_node', # Menggunakan nama hasil pengecekan pkg executables
-            name='udp_bridge',
+            package='localization',
+            executable='udp_receiver',
+            name='udp_receiver',
             output='screen'
-        )
+        ),
     ])

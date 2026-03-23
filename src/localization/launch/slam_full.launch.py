@@ -1,6 +1,5 @@
 """
-Launch file untuk 3D SLAM pipeline lengkap.
-Menjalankan SLAM node dengan konfigurasi dari YAML.
+Launch file untuk 3D SLAM pipeline lengkap (arsitektur lidarslam_ros2).
 
 Penggunaan:
   ros2 launch localization slam_full.launch.py
@@ -34,7 +33,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     slam_config = LaunchConfiguration('slam_config')
 
-    # SLAM Node
+    # SLAM Node (scan-to-submap, lidarslam_ros2 architecture)
     slam_node = Node(
         package='localization',
         executable='slam_rgbd_cam_node',
@@ -43,15 +42,12 @@ def generate_launch_description():
             slam_config,
             {'use_sim_time': use_sim_time}
         ],
-        output='screen',
-    )
-
-    # SLAM Listen Node (monitor pose output)
-    slam_listen = Node(
-        package='localization',
-        executable='slam_listen_node',
-        name='slam_listen',
-        parameters=[{'use_sim_time': use_sim_time}],
+        remappings=[
+            ('input_cloud', '/full_pointcloud'),
+            ('current_pose', '/slam/pose'),
+            ('map', '/slam/map_cloud'),
+            ('path', '/slam/trajectory'),
+        ],
         output='screen',
     )
 
@@ -60,5 +56,4 @@ def generate_launch_description():
         slam_config_arg,
         map_save_path_arg,
         slam_node,
-        slam_listen,
     ])

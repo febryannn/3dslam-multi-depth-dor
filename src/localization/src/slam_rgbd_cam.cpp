@@ -20,6 +20,9 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/convert.h>
+#include <tf2/impl/convert.h>
+#include <tf2/transform_datatypes.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
@@ -35,552 +38,741 @@
 
 #include <Eigen/Dense>
 
+using namespace std::chrono_literals;
+
 /**
- * 3D SLAM Node — Arsitektur scan-to-submap ala lidarslam_ros2
+ * 3D SLAM Node — Arsitektur scan-to-submap mengikuti lidarslam_ros2
  *
- * Pipeline:
- *   1. pointcloud_concatenate menggabungkan 4 kamera (via TF2) → /full_pointcloud
- *   2. Node ini subscribe /full_pointcloud (sudah di frame base_link)
- *   3. Filter + downsample
+ * Mengikuti pattern ScanMatcherComponent dari lidarslam_ros2:
+ *   1. Receive point cloud (dari pointcloud_concatenate atau langsung)
+ *   2. Transform ke robot_frame jika diperlukan
+ *   3. Filter (min/max range, voxel grid)
  *   4. GICP/NDT scan-to-submap matching
- *   5. Update submap saat robot bergerak cukup jauh
- *   6. Publish map→odom TF, map cloud, trajectory
+ *   5. Publish pose, path, TF (map->odom atau map->base_link)
+ *   6. Update submap saat robot bergerak cukup jauh (background thread)
+ *   7. Publish full map secara periodik
  */
 class SlamRgbdCam : public rclcpp::Node {
 public:
     using PointT = pcl::PointXYZI;
     using PointCloudT = pcl::PointCloud<PointT>;
 
-    SlamRgbdCam() : Node("slam_rgbd_cam") {
-        // --- Parameter ---
-        this->declare_parameter("registration_method", "GICP");
-        this->declare_parameter("ndt_resolution", 1.0);
-        this->declare_parameter("gicp_corr_dist_threshold", 5.0);
-        this->declare_parameter("trans_for_mapupdate", 0.5);
-        this->declare_parameter("vg_size_for_input", 0.1);
-        this->declare_parameter("vg_size_for_map", 0.05);
-        this->declare_parameter("num_targeted_cloud", 10);
-        this->declare_parameter("map_publish_period", 5.0);
-        this->declare_parameter("scan_min_range", 0.3);
-        this->declare_parameter("scan_max_range", 8.0);
-        this->declare_parameter("crop_min_z", -0.3);
-        this->declare_parameter("crop_max_z", 2.5);
-        this->declare_parameter("use_odom", true);
-        this->declare_parameter("publish_tf", true);
-        this->declare_parameter("global_frame_id", "map");
-        this->declare_parameter("robot_frame_id", "base_link");
-        this->declare_parameter("odom_frame_id", "odom");
-        this->declare_parameter("map_save_path", "/tmp/slam_map");
-        this->declare_parameter("input_cloud_topic", "/full_pointcloud");
+    SlamRgbdCam(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+    : Node("slam_rgbd_cam", options),
+      clock_(RCL_ROS_TIME),
+      tfbuffer_(std::make_shared<rclcpp::Clock>(clock_)),
+      listener_(tfbuffer_),
+      broadcaster_(this)
+    {
+        RCLCPP_INFO(get_logger(), "initialization start");
 
-        registration_method_ = this->get_parameter("registration_method").as_string();
-        ndt_resolution_ = this->get_parameter("ndt_resolution").as_double();
-        gicp_corr_dist_ = this->get_parameter("gicp_corr_dist_threshold").as_double();
-        trans_for_mapupdate_ = this->get_parameter("trans_for_mapupdate").as_double();
-        vg_size_input_ = this->get_parameter("vg_size_for_input").as_double();
-        vg_size_map_ = this->get_parameter("vg_size_for_map").as_double();
-        num_targeted_cloud_ = this->get_parameter("num_targeted_cloud").as_int();
-        map_publish_period_ = this->get_parameter("map_publish_period").as_double();
-        scan_min_range_ = this->get_parameter("scan_min_range").as_double();
-        scan_max_range_ = this->get_parameter("scan_max_range").as_double();
-        crop_min_z_ = this->get_parameter("crop_min_z").as_double();
-        crop_max_z_ = this->get_parameter("crop_max_z").as_double();
-        use_odom_ = this->get_parameter("use_odom").as_bool();
-        publish_tf_ = this->get_parameter("publish_tf").as_bool();
-        global_frame_id_ = this->get_parameter("global_frame_id").as_string();
-        robot_frame_id_ = this->get_parameter("robot_frame_id").as_string();
-        odom_frame_id_ = this->get_parameter("odom_frame_id").as_string();
-        map_save_path_ = this->get_parameter("map_save_path").as_string();
-        std::string input_topic = this->get_parameter("input_cloud_topic").as_string();
+        // --- Declare & get parameters ---
+        double ndt_resolution;
+        double gicp_corr_dist_threshold;
 
-        // --- Registration algorithm ---
-        setupRegistration();
+        declare_parameter("global_frame_id", "map");
+        get_parameter("global_frame_id", global_frame_id_);
+        declare_parameter("robot_frame_id", "base_link");
+        get_parameter("robot_frame_id", robot_frame_id_);
+        declare_parameter("odom_frame_id", "odom");
+        get_parameter("odom_frame_id", odom_frame_id_);
+        declare_parameter("registration_method", "GICP");
+        get_parameter("registration_method", registration_method_);
+        declare_parameter("ndt_resolution", 5.0);
+        get_parameter("ndt_resolution", ndt_resolution);
+        declare_parameter("gicp_corr_dist_threshold", 5.0);
+        get_parameter("gicp_corr_dist_threshold", gicp_corr_dist_threshold);
+        declare_parameter("trans_for_mapupdate", 1.5);
+        get_parameter("trans_for_mapupdate", trans_for_mapupdate_);
+        declare_parameter("vg_size_for_input", 0.2);
+        get_parameter("vg_size_for_input", vg_size_for_input_);
+        declare_parameter("vg_size_for_map", 0.1);
+        get_parameter("vg_size_for_map", vg_size_for_map_);
+        declare_parameter("use_min_max_filter", false);
+        get_parameter("use_min_max_filter", use_min_max_filter_);
+        declare_parameter("scan_min_range", 0.1);
+        get_parameter("scan_min_range", scan_min_range_);
+        declare_parameter("scan_max_range", 100.0);
+        get_parameter("scan_max_range", scan_max_range_);
+        declare_parameter("map_publish_period", 15.0);
+        get_parameter("map_publish_period", map_publish_period_);
+        declare_parameter("num_targeted_cloud", 10);
+        get_parameter("num_targeted_cloud", num_targeted_cloud_);
 
-        // --- Init ---
-        targeted_cloud_.reset(new PointCloudT());
-        path_msg_.header.frame_id = global_frame_id_;
-        current_pose_ = Eigen::Matrix4f::Identity();
-        previous_odom_mat_ = Eigen::Matrix4f::Zero();
+        if (num_targeted_cloud_ < 1) {
+            RCLCPP_WARN(get_logger(), "num_targeted_cloud should be positive, setting to 1");
+            num_targeted_cloud_ = 1;
+        }
 
-        // --- TF ---
-        tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
-        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        declare_parameter("initial_pose_x", 0.0);
+        get_parameter("initial_pose_x", initial_pose_x_);
+        declare_parameter("initial_pose_y", 0.0);
+        get_parameter("initial_pose_y", initial_pose_y_);
+        declare_parameter("initial_pose_z", 0.0);
+        get_parameter("initial_pose_z", initial_pose_z_);
+        declare_parameter("initial_pose_qx", 0.0);
+        get_parameter("initial_pose_qx", initial_pose_qx_);
+        declare_parameter("initial_pose_qy", 0.0);
+        get_parameter("initial_pose_qy", initial_pose_qy_);
+        declare_parameter("initial_pose_qz", 0.0);
+        get_parameter("initial_pose_qz", initial_pose_qz_);
+        declare_parameter("initial_pose_qw", 1.0);
+        get_parameter("initial_pose_qw", initial_pose_qw_);
+        declare_parameter("set_initial_pose", false);
+        get_parameter("set_initial_pose", set_initial_pose_);
+        declare_parameter("publish_tf", true);
+        get_parameter("publish_tf", publish_tf_);
+        declare_parameter("use_odom", false);
+        get_parameter("use_odom", use_odom_);
+        declare_parameter("debug_flag", false);
+        get_parameter("debug_flag", debug_flag_);
 
-        // --- Sub/Pub ---
-        sub_cloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-            input_topic, rclcpp::SensorDataQoS(),
-            std::bind(&SlamRgbdCam::cloudCallback, this, std::placeholders::_1));
+        declare_parameter("input_cloud_topic", "/full_pointcloud");
+        get_parameter("input_cloud_topic", input_cloud_topic_);
+        declare_parameter("map_save_path", "/tmp/slam_map");
+        get_parameter("map_save_path", map_save_path_);
 
-        pub_map_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            "/slam/map_cloud", rclcpp::QoS(1).durability_volatile());
-        pub_current_scan_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            "/slam/current_scan", rclcpp::QoS(1).durability_volatile());
-        pub_path_ = this->create_publisher<nav_msgs::msg::Path>("/slam/trajectory", 10);
-        pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/slam/pose", 10);
+        // Print parameters
+        std::cout << "=== SLAM Parameters ===" << std::endl;
+        std::cout << "registration_method: " << registration_method_ << std::endl;
+        std::cout << "ndt_resolution[m]: " << ndt_resolution << std::endl;
+        std::cout << "gicp_corr_dist_threshold[m]: " << gicp_corr_dist_threshold << std::endl;
+        std::cout << "trans_for_mapupdate[m]: " << trans_for_mapupdate_ << std::endl;
+        std::cout << "vg_size_for_input[m]: " << vg_size_for_input_ << std::endl;
+        std::cout << "vg_size_for_map[m]: " << vg_size_for_map_ << std::endl;
+        std::cout << "use_min_max_filter: " << std::boolalpha << use_min_max_filter_ << std::endl;
+        std::cout << "scan_min_range[m]: " << scan_min_range_ << std::endl;
+        std::cout << "scan_max_range[m]: " << scan_max_range_ << std::endl;
+        std::cout << "set_initial_pose: " << std::boolalpha << set_initial_pose_ << std::endl;
+        std::cout << "publish_tf: " << std::boolalpha << publish_tf_ << std::endl;
+        std::cout << "use_odom: " << std::boolalpha << use_odom_ << std::endl;
+        std::cout << "debug_flag: " << std::boolalpha << debug_flag_ << std::endl;
+        std::cout << "map_publish_period[sec]: " << map_publish_period_ << std::endl;
+        std::cout << "num_targeted_cloud: " << num_targeted_cloud_ << std::endl;
+        std::cout << "input_cloud_topic: " << input_cloud_topic_ << std::endl;
+        std::cout << "=======================" << std::endl;
 
-        save_map_srv_ = this->create_service<std_srvs::srv::Empty>(
-            "/slam/save_map",
-            std::bind(&SlamRgbdCam::saveMapCallback, this,
-                      std::placeholders::_1, std::placeholders::_2));
-
-        last_map_publish_time_ = this->now();
-
-        RCLCPP_INFO(this->get_logger(), "=== 3D SLAM READY (scan-to-submap) ===");
-        RCLCPP_INFO(this->get_logger(), "  Method: %s | Input: %s",
-                    registration_method_.c_str(), input_topic.c_str());
-        RCLCPP_INFO(this->get_logger(), "  Submap trigger: %.2fm | Target submaps: %d",
-                    trans_for_mapupdate_, num_targeted_cloud_);
-        RCLCPP_INFO(this->get_logger(), "  Save: ros2 service call /slam/save_map std_srvs/srv/Empty");
-    }
-
-    ~SlamRgbdCam() { saveMap(); }
-
-private:
-    // =============== Registration Setup ===============
-    void setupRegistration() {
+        // --- Registration algorithm setup ---
         if (registration_method_ == "NDT") {
             auto ndt = std::make_shared<pcl::NormalDistributionsTransform<PointT, PointT>>();
-            ndt->setResolution(ndt_resolution_);
+            ndt->setResolution(ndt_resolution);
             ndt->setTransformationEpsilon(0.01);
             ndt->setMaximumIterations(50);
             registration_ = ndt;
-            RCLCPP_INFO(this->get_logger(), "NDT (resolution=%.2f)", ndt_resolution_);
-        } else {
+        } else if (registration_method_ == "GICP") {
             auto gicp = std::make_shared<pcl::GeneralizedIterativeClosestPoint<PointT, PointT>>();
-            gicp->setMaxCorrespondenceDistance(gicp_corr_dist_);
+            gicp->setMaxCorrespondenceDistance(gicp_corr_dist_threshold);
             gicp->setTransformationEpsilon(1e-8);
             gicp->setMaximumIterations(64);
             gicp->setEuclideanFitnessEpsilon(1e-6);
             registration_ = gicp;
-            RCLCPP_INFO(this->get_logger(), "GICP (corr_dist=%.2f)", gicp_corr_dist_);
-        }
-    }
-
-    // =============== Filtering ===============
-    PointCloudT::Ptr filterCloud(const PointCloudT::Ptr& input) {
-        auto filtered = std::make_shared<PointCloudT>();
-
-        // Range + Z filter
-        for (const auto& pt : input->points) {
-            if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z))
-                continue;
-            float range = std::sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
-            if (range < scan_min_range_ || range > scan_max_range_) continue;
-            if (pt.z < crop_min_z_ || pt.z > crop_max_z_) continue;
-            filtered->push_back(pt);
-        }
-        if (filtered->empty()) return filtered;
-
-        // Voxel grid
-        pcl::VoxelGrid<PointT> vg;
-        vg.setInputCloud(filtered);
-        vg.setLeafSize(vg_size_input_, vg_size_input_, vg_size_input_);
-        vg.filter(*filtered);
-
-        return filtered;
-    }
-
-    // =============== Main Callback ===============
-    void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-        if (msg->width * msg->height == 0) return;
-
-        auto raw = std::make_shared<PointCloudT>();
-        pcl::fromROSMsg(*msg, *raw);
-        if (raw->empty()) return;
-
-        auto cloud = filterCloud(raw);
-        if (cloud->size() < 30) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                "Cloud terlalu sedikit: %zu", cloud->size());
+        } else {
+            RCLCPP_ERROR(get_logger(), "invalid registration method: %s", registration_method_.c_str());
             return;
         }
 
-        rclcpp::Time stamp = msg->header.stamp;
+        // --- Init state ---
+        path_.header.frame_id = global_frame_id_;
+        previous_odom_mat_ = Eigen::Matrix4f::Identity();
 
-        if (is_first_frame_) {
-            initializeMap(cloud, stamp);
-            is_first_frame_ = false;
-            return;
+        // --- Initialize publishers & subscribers ---
+        initializePubSub();
+
+        // --- Set initial pose if configured ---
+        if (set_initial_pose_) {
+            RCLCPP_INFO(get_logger(), "set initial pose");
+            auto msg = std::make_shared<geometry_msgs::msg::PoseStamped>();
+            msg->header.stamp = now();
+            msg->header.frame_id = global_frame_id_;
+            msg->pose.position.x = initial_pose_x_;
+            msg->pose.position.y = initial_pose_y_;
+            msg->pose.position.z = initial_pose_z_;
+            msg->pose.orientation.x = initial_pose_qx_;
+            msg->pose.orientation.y = initial_pose_qy_;
+            msg->pose.orientation.z = initial_pose_qz_;
+            msg->pose.orientation.w = initial_pose_qw_;
+            current_pose_stamped_ = *msg;
+            pose_pub_->publish(current_pose_stamped_);
+            initial_pose_received_ = true;
+            path_.poses.push_back(*msg);
         }
 
-        receiveCloud(cloud, stamp);
+        RCLCPP_INFO(get_logger(), "initialization end");
     }
 
-    // =============== Initialize Map ===============
-    void initializeMap(const PointCloudT::Ptr& cloud, const rclcpp::Time& stamp) {
-        RCLCPP_INFO(this->get_logger(), "Membuat map pertama...");
+    ~SlamRgbdCam() {
+        saveMap();
+        if (mapping_thread_.joinable()) {
+            mapping_thread_.detach();
+        }
+    }
 
-        auto map_cloud = std::make_shared<PointCloudT>();
-        pcl::VoxelGrid<PointT> vg;
-        vg.setLeafSize(vg_size_map_, vg_size_map_, vg_size_map_);
-        vg.setInputCloud(cloud);
-        vg.filter(*map_cloud);
+private:
+    // =============== SubMap structure ===============
+    struct SubMap {
+        std_msgs::msg::Header header;
+        double distance;
+        geometry_msgs::msg::Pose pose;
+        sensor_msgs::msg::PointCloud2 cloud;  // local frame cloud (as ROS msg)
+    };
 
-        // Transform ke global (identity)
-        auto transformed = std::make_shared<PointCloudT>();
-        pcl::transformPointCloud(*map_cloud, *transformed, current_pose_);
+    // =============== Initialize Publishers/Subscribers ===============
+    void initializePubSub() {
+        RCLCPP_INFO(get_logger(), "initialize Publishers and Subscribers");
 
-        registration_->setInputTarget(transformed);
+        // --- Initial pose subscriber ---
+        auto initial_pose_callback =
+            [this](const typename geometry_msgs::msg::PoseStamped::SharedPtr msg) -> void {
+                if (msg->header.frame_id != global_frame_id_) {
+                    RCLCPP_WARN(get_logger(), "initial_pose is not in the global frame");
+                    return;
+                }
+                RCLCPP_INFO(get_logger(), "initial_pose is received");
+                current_pose_stamped_ = *msg;
+                previous_position_.x() = current_pose_stamped_.pose.position.x;
+                previous_position_.y() = current_pose_stamped_.pose.position.y;
+                previous_position_.z() = current_pose_stamped_.pose.position.z;
+                initial_pose_received_ = true;
+                pose_pub_->publish(current_pose_stamped_);
+            };
+
+        // --- Cloud callback (main SLAM pipeline) ---
+        auto cloud_callback =
+            [this](const typename sensor_msgs::msg::PointCloud2::SharedPtr msg) -> void {
+                if (!initial_pose_received_) {
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "initial_pose is not received, waiting...");
+                    return;
+                }
+
+                sensor_msgs::msg::PointCloud2 transformed_msg;
+                try {
+                    tf2::TimePoint time_point = tf2::TimePoint(
+                        std::chrono::seconds(msg->header.stamp.sec) +
+                        std::chrono::nanoseconds(msg->header.stamp.nanosec));
+                    const geometry_msgs::msg::TransformStamped transform =
+                        tfbuffer_.lookupTransform(
+                            robot_frame_id_, msg->header.frame_id, time_point);
+                    tf2::doTransform(*msg, transformed_msg, transform);
+                } catch (tf2::TransformException & e) {
+                    // If frame is already robot_frame, use as-is
+                    if (msg->header.frame_id == robot_frame_id_) {
+                        transformed_msg = *msg;
+                    } else {
+                        RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                            "TF transform failed: %s", e.what());
+                        return;
+                    }
+                }
+
+                PointCloudT::Ptr tmp_ptr(new PointCloudT());
+                pcl::fromROSMsg(transformed_msg, *tmp_ptr);
+                if (tmp_ptr->empty()) return;
+
+                // Min/max range filter
+                if (use_min_max_filter_) {
+                    PointCloudT::Ptr filtered(new PointCloudT());
+                    for (const auto & p : tmp_ptr->points) {
+                        double r = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+                        if (scan_min_range_ < r && r < scan_max_range_) {
+                            filtered->points.push_back(p);
+                        }
+                    }
+                    tmp_ptr = filtered;
+                }
+
+                if (tmp_ptr->size() < 30) {
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "Cloud too small: %zu points", tmp_ptr->size());
+                    return;
+                }
+
+                if (!initial_cloud_received_) {
+                    RCLCPP_INFO(get_logger(), "initial cloud is received");
+                    initial_cloud_received_ = true;
+                    initializeMap(tmp_ptr, msg->header);
+                    last_map_time_ = clock_.now();
+                }
+
+                if (initial_cloud_received_) {
+                    receiveCloud(tmp_ptr, msg->header.stamp);
+                }
+            };
+
+        initial_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+            "initial_pose", rclcpp::QoS(10), initial_pose_callback);
+
+        input_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+            input_cloud_topic_, rclcpp::SensorDataQoS(), cloud_callback);
+
+        // Publishers
+        pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(
+            "current_pose", rclcpp::QoS(10));
+        map_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+            "map", rclcpp::QoS(10));
+        path_pub_ = create_publisher<nav_msgs::msg::Path>(
+            "path", rclcpp::QoS(10));
+
+        // Save map service
+        save_map_srv_ = create_service<std_srvs::srv::Empty>(
+            "save_map",
+            [this](const std::shared_ptr<std_srvs::srv::Empty::Request>,
+                   std::shared_ptr<std_srvs::srv::Empty::Response>) {
+                RCLCPP_INFO(get_logger(), "Save map requested...");
+                saveMap();
+            });
+    }
+
+    // =============== Initialize Map (first frame) ===============
+    void initializeMap(const PointCloudT::Ptr & cloud_ptr,
+                       const std_msgs::msg::Header & header) {
+        RCLCPP_INFO(get_logger(), "create a first map");
+
+        // Downsample for map storage
+        PointCloudT::Ptr map_cloud(new PointCloudT());
+        pcl::VoxelGrid<PointT> voxel_grid;
+        voxel_grid.setLeafSize(vg_size_for_map_, vg_size_for_map_, vg_size_for_map_);
+        voxel_grid.setInputCloud(cloud_ptr);
+        voxel_grid.filter(*map_cloud);
+
+        // Transform to global frame using current pose
+        Eigen::Matrix4f sim_trans = getTransformation(current_pose_stamped_.pose);
+        PointCloudT::Ptr transformed_cloud(new PointCloudT());
+        pcl::transformPointCloud(*map_cloud, *transformed_cloud, sim_trans);
+
+        // Set as registration target
+        registration_->setInputTarget(transformed_cloud);
+
+        // Store as first submap
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        pcl::toROSMsg(*map_cloud, cloud_msg);
 
         SubMap submap;
-        submap.cloud = map_cloud;
-        submap.pose = current_pose_;
-        submap.distance = 0.0;
+        submap.header = header;
+        submap.distance = 0;
+        submap.pose = current_pose_stamped_.pose;
+        submap.cloud = cloud_msg;
+
         submaps_.push_back(submap);
 
-        *targeted_cloud_ = *transformed;
+        // Publish initial map
+        sensor_msgs::msg::PointCloud2 map_msg;
+        pcl::toROSMsg(*transformed_cloud, map_msg);
+        map_msg.header.frame_id = global_frame_id_;
+        map_msg.header.stamp = header.stamp;
+        map_pub_->publish(map_msg);
 
-        publishPose(current_pose_, stamp);
-        publishMapCloud(stamp);
-        if (publish_tf_) publishTF(stamp);
-
-        RCLCPP_INFO(this->get_logger(), "Map pertama OK! (%zu pts). SLAM aktif.", map_cloud->size());
+        RCLCPP_INFO(get_logger(), "First map created (%zu pts). SLAM active.",
+                    map_cloud->size());
     }
 
-    // =============== Scan-to-Submap Matching ===============
-    void receiveCloud(const PointCloudT::Ptr& cloud, const rclcpp::Time& stamp) {
-        // Cek background map update selesai
+    // =============== Receive Cloud (main SLAM loop) ===============
+    void receiveCloud(const PointCloudT::Ptr & cloud_ptr,
+                      const rclcpp::Time stamp) {
+        // Check if background map update is done
         if (mapping_flag_ && mapping_future_.valid()) {
-            auto status = mapping_future_.wait_for(std::chrono::seconds(0));
+            auto status = mapping_future_.wait_for(0s);
             if (status == std::future_status::ready) {
                 if (is_map_updated_) {
-                    std::lock_guard<std::mutex> lock(map_mutex_);
-                    auto target = std::make_shared<PointCloudT>(targeted_cloud_copy_);
-                    if (registration_method_ != "NDT") {
+                    PointCloudT::Ptr targeted_cloud_ptr(
+                        new PointCloudT(targeted_cloud_));
+                    if (registration_method_ == "NDT") {
+                        registration_->setInputTarget(targeted_cloud_ptr);
+                    } else {
+                        // For GICP, downsample the target
+                        PointCloudT::Ptr filtered(new PointCloudT());
                         pcl::VoxelGrid<PointT> vg;
-                        vg.setLeafSize(vg_size_input_, vg_size_input_, vg_size_input_);
-                        vg.setInputCloud(target);
-                        vg.filter(*target);
+                        vg.setLeafSize(vg_size_for_input_, vg_size_for_input_, vg_size_for_input_);
+                        vg.setInputCloud(targeted_cloud_ptr);
+                        vg.filter(*filtered);
+                        registration_->setInputTarget(filtered);
                     }
-                    registration_->setInputTarget(target);
                     is_map_updated_ = false;
                 }
                 mapping_flag_ = false;
+                if (mapping_thread_.joinable()) {
+                    mapping_thread_.detach();
+                }
             }
         }
 
-        // Set source
-        registration_->setInputSource(cloud);
+        // Voxel grid filter input cloud
+        PointCloudT::Ptr filtered_cloud(new PointCloudT());
+        pcl::VoxelGrid<PointT> voxel_grid;
+        voxel_grid.setLeafSize(vg_size_for_input_, vg_size_for_input_, vg_size_for_input_);
+        voxel_grid.setInputCloud(cloud_ptr);
+        voxel_grid.filter(*filtered_cloud);
 
-        // Initial guess
-        Eigen::Matrix4f initial_guess = current_pose_;
+        registration_->setInputSource(filtered_cloud);
+
+        // Compute initial guess
+        Eigen::Matrix4f sim_trans = getTransformation(current_pose_stamped_.pose);
+
         if (use_odom_) {
-            initial_guess = getOdomBasedGuess(stamp);
-        }
-
-        // Align
-        auto aligned = std::make_shared<PointCloudT>();
-        registration_->align(*aligned, initial_guess);
-
-        if (registration_->hasConverged()) {
-            current_pose_ = registration_->getFinalTransformation();
-            double fitness = registration_->getFitnessScore();
-            RCLCPP_DEBUG(this->get_logger(), "Converged. Fitness: %.4f", fitness);
-        } else {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 3000,
-                "Scan matching gagal converge, pakai odometry");
-            if (use_odom_) current_pose_ = initial_guess;
-        }
-
-        // Cek apakah perlu submap baru
-        Eigen::Vector3f diff = current_pose_.block<3, 1>(0, 3) - last_submap_pose_.block<3, 1>(0, 3);
-        float trans_diff = diff.norm();
-
-        if (trans_diff > trans_for_mapupdate_ && !mapping_flag_) {
-            last_submap_pose_ = current_pose_;
-            mapping_flag_ = true;
-            auto cloud_copy = std::make_shared<PointCloudT>(*cloud);
-            Eigen::Matrix4f pose_copy = current_pose_;
-            mapping_future_ = std::async(std::launch::async,
-                &SlamRgbdCam::updateMap, this, cloud_copy, pose_copy);
-        }
-
-        // Publish
-        publishPose(current_pose_, stamp);
-        publishCurrentScan(cloud, current_pose_, stamp);
-        if (publish_tf_) publishTF(stamp);
-
-        double dt = (this->now() - last_map_publish_time_).seconds();
-        if (dt > map_publish_period_) {
-            publishMapCloud(stamp);
-            last_map_publish_time_ = this->now();
-        }
-
-        pub_path_->publish(path_msg_);
-    }
-
-    // =============== Odometry Initial Guess ===============
-    Eigen::Matrix4f getOdomBasedGuess(const rclcpp::Time& /*stamp*/) {
-        try {
-            auto odom_tf = tf_buffer_->lookupTransform(
-                odom_frame_id_, robot_frame_id_, tf2::TimePointZero);
-            Eigen::Affine3d odom_affine = tf2::transformToEigen(odom_tf);
+            geometry_msgs::msg::TransformStamped odom_trans;
+            try {
+                odom_trans = tfbuffer_.lookupTransform(
+                    odom_frame_id_, robot_frame_id_,
+                    tf2_ros::fromMsg(stamp));
+            } catch (tf2::TransformException & e) {
+                RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                    "Odom TF lookup failed: %s", e.what());
+            }
+            Eigen::Affine3d odom_affine = tf2::transformToEigen(odom_trans);
             Eigen::Matrix4f odom_mat = odom_affine.matrix().cast<float>();
 
-            if (previous_odom_mat_ != Eigen::Matrix4f::Zero()) {
-                Eigen::Matrix4f delta = previous_odom_mat_.inverse() * odom_mat;
-                previous_odom_mat_ = odom_mat;
-                return current_pose_ * delta;
+            if (previous_odom_mat_ != Eigen::Matrix4f::Identity()) {
+                sim_trans = sim_trans * previous_odom_mat_.inverse() * odom_mat;
             }
             previous_odom_mat_ = odom_mat;
-        } catch (tf2::TransformException& e) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                "Odom TF gagal: %s", e.what());
         }
-        return current_pose_;
+
+        // Align (scan matching)
+        PointCloudT::Ptr output_cloud(new PointCloudT());
+        rclcpp::Clock system_clock;
+        rclcpp::Time time_align_start = system_clock.now();
+        registration_->align(*output_cloud, sim_trans);
+        rclcpp::Time time_align_end = system_clock.now();
+
+        Eigen::Matrix4f final_transformation = registration_->getFinalTransformation();
+
+        // Publish pose, TF, and check map update
+        publishMapAndPose(cloud_ptr, final_transformation, stamp);
+
+        // Debug output
+        if (debug_flag_) {
+            tf2::Quaternion quat_tf;
+            double roll, pitch, yaw;
+            tf2::fromMsg(current_pose_stamped_.pose.orientation, quat_tf);
+            tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
+
+            std::cout << "---------------------------------------------------------" << std::endl;
+            std::cout << "nanoseconds: " << stamp.nanoseconds() << std::endl;
+            std::cout << "trans: " << trans_ << std::endl;
+            std::cout << "align time: " << time_align_end.seconds() - time_align_start.seconds()
+                      << "s" << std::endl;
+            std::cout << "number of filtered cloud points: " << filtered_cloud->size() << std::endl;
+            std::cout << "initial transformation:" << std::endl;
+            std::cout << sim_trans << std::endl;
+            std::cout << "has converged: " << registration_->hasConverged() << std::endl;
+            std::cout << "fitness score: " << registration_->getFitnessScore() << std::endl;
+            std::cout << "final transformation:" << std::endl;
+            std::cout << final_transformation << std::endl;
+            std::cout << "rpy: roll=" << roll * 180 / M_PI
+                      << ", pitch=" << pitch * 180 / M_PI
+                      << ", yaw=" << yaw * 180 / M_PI << std::endl;
+            std::cout << "num_submaps: " << submaps_.size() << std::endl;
+            std::cout << "moving distance: " << latest_distance_ << std::endl;
+            std::cout << "---------------------------------------------------------" << std::endl;
+        }
     }
 
-    // =============== Update Map (Background) ===============
-    void updateMap(const PointCloudT::Ptr cloud_ptr, const Eigen::Matrix4f pose) {
-        // Downsample
-        auto filtered = std::make_shared<PointCloudT>();
-        pcl::VoxelGrid<PointT> vg;
-        vg.setLeafSize(vg_size_map_, vg_size_map_, vg_size_map_);
-        vg.setInputCloud(cloud_ptr);
-        vg.filter(*filtered);
+    // =============== Publish Map, Pose and TF ===============
+    void publishMapAndPose(const PointCloudT::Ptr & cloud_ptr,
+                           const Eigen::Matrix4f final_transformation,
+                           const rclcpp::Time stamp) {
+        Eigen::Vector3d position = final_transformation.block<3, 1>(0, 3).cast<double>();
+        Eigen::Matrix3d rot_mat = final_transformation.block<3, 3>(0, 0).cast<double>();
+        Eigen::Quaterniond quat_eig(rot_mat);
+        geometry_msgs::msg::Quaternion quat_msg = tf2::toMsg(quat_eig);
 
-        // Transform ke global
-        auto transformed = std::make_shared<PointCloudT>();
-        pcl::transformPointCloud(*filtered, *transformed, pose);
+        // Publish TF
+        if (publish_tf_) {
+            geometry_msgs::msg::TransformStamped base_to_map_msg;
+            base_to_map_msg.header.stamp = stamp;
+            base_to_map_msg.header.frame_id = global_frame_id_;
+            base_to_map_msg.child_frame_id = robot_frame_id_;
+            base_to_map_msg.transform.translation.x = position.x();
+            base_to_map_msg.transform.translation.y = position.y();
+            base_to_map_msg.transform.translation.z = position.z();
+            base_to_map_msg.transform.rotation = quat_msg;
 
-        // Bangun targeted_cloud dari N submap terakhir + baru
-        PointCloudT new_targeted;
-        new_targeted += *transformed;
+            if (use_odom_) {
+                // Calculate map->odom transform
+                geometry_msgs::msg::TransformStamped odom_to_map_msg;
+                odom_to_map_msg = calculateMapToOdomTransform(base_to_map_msg, stamp);
+                broadcaster_.sendTransform(odom_to_map_msg);
+            } else {
+                // Direct map->base_link
+                broadcaster_.sendTransform(base_to_map_msg);
+            }
+        }
 
-        int n = submaps_.size();
-        for (int i = 0; i < num_targeted_cloud_ - 1; ++i) {
-            int idx = n - 1 - i;
+        // Update and publish current pose
+        current_pose_stamped_.header.stamp = stamp;
+        current_pose_stamped_.header.frame_id = global_frame_id_;
+        current_pose_stamped_.pose.position.x = position.x();
+        current_pose_stamped_.pose.position.y = position.y();
+        current_pose_stamped_.pose.position.z = position.z();
+        current_pose_stamped_.pose.orientation = quat_msg;
+        pose_pub_->publish(current_pose_stamped_);
+
+        // Update path
+        path_.poses.push_back(current_pose_stamped_);
+        path_pub_->publish(path_);
+
+        // Check if we need to create a new submap
+        trans_ = (position - previous_position_).norm();
+        if (trans_ >= trans_for_mapupdate_ && !mapping_flag_) {
+            geometry_msgs::msg::PoseStamped current_pose_copy = current_pose_stamped_;
+            previous_position_ = position;
+
+            mapping_task_ = std::packaged_task<void()>(
+                std::bind(&SlamRgbdCam::updateMap, this,
+                          cloud_ptr, final_transformation, current_pose_copy));
+            mapping_future_ = mapping_task_.get_future();
+            mapping_thread_ = std::thread(std::move(std::ref(mapping_task_)));
+            mapping_flag_ = true;
+        }
+    }
+
+    // =============== Calculate map->odom Transform ===============
+    // Follows lidarslam_ros2 calculateMaptoOdomTransform pattern
+    geometry_msgs::msg::TransformStamped calculateMapToOdomTransform(
+        const geometry_msgs::msg::TransformStamped & base_to_map_msg,
+        const rclcpp::Time stamp)
+    {
+        geometry_msgs::msg::TransformStamped odom_to_map_msg;
+        try {
+            geometry_msgs::msg::PoseStamped odom_to_map;
+            geometry_msgs::msg::PoseStamped base_to_map;
+
+            tf2::Transform base_to_map_msg_tf;
+            base_to_map.header.frame_id = robot_frame_id_;
+            tf2::fromMsg(base_to_map_msg.transform, base_to_map_msg_tf);
+            tf2::toMsg(base_to_map_msg_tf.inverse(), base_to_map.pose);
+
+            tfbuffer_.transform(base_to_map, odom_to_map, odom_frame_id_);
+
+            tf2::Transform odom_to_map_tf;
+            tf2::impl::Converter<true, false>::convert(odom_to_map.pose, odom_to_map_tf);
+            tf2::impl::Converter<false, true>::convert(
+                odom_to_map_tf.inverse(), odom_to_map_msg.transform);
+
+            odom_to_map_msg.header.stamp = stamp;
+            odom_to_map_msg.header.frame_id = global_frame_id_;
+            odom_to_map_msg.child_frame_id = odom_frame_id_;
+        } catch (tf2::TransformException & e) {
+            RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                "Transform from base_link to odom failed: %s", e.what());
+        }
+
+        return odom_to_map_msg;
+    }
+
+    // =============== Update Map (Background Thread) ===============
+    void updateMap(const PointCloudT::Ptr cloud_ptr,
+                   const Eigen::Matrix4f final_transformation,
+                   const geometry_msgs::msg::PoseStamped current_pose_stamped) {
+        // Downsample for map storage
+        PointCloudT::Ptr filtered_cloud(new PointCloudT());
+        pcl::VoxelGrid<PointT> voxel_grid;
+        voxel_grid.setLeafSize(vg_size_for_map_, vg_size_for_map_, vg_size_for_map_);
+        voxel_grid.setInputCloud(cloud_ptr);
+        voxel_grid.filter(*filtered_cloud);
+
+        // Transform to global frame
+        PointCloudT::Ptr transformed_cloud(new PointCloudT());
+        pcl::transformPointCloud(*filtered_cloud, *transformed_cloud, final_transformation);
+
+        // Build targeted cloud from new + N-1 recent submaps
+        targeted_cloud_.clear();
+        targeted_cloud_ += *transformed_cloud;
+
+        int num_submaps = submaps_.size();
+        for (int i = 0; i < num_targeted_cloud_ - 1; i++) {
+            int idx = num_submaps - 1 - i;
             if (idx < 0) continue;
-            auto tmp = std::make_shared<PointCloudT>();
-            pcl::transformPointCloud(*submaps_[idx].cloud, *tmp, submaps_[idx].pose);
-            new_targeted += *tmp;
+
+            PointCloudT::Ptr tmp_ptr(new PointCloudT());
+            pcl::fromROSMsg(submaps_[idx].cloud, *tmp_ptr);
+
+            PointCloudT::Ptr transformed_tmp(new PointCloudT());
+            Eigen::Affine3d submap_affine;
+            tf2::fromMsg(submaps_[idx].pose, submap_affine);
+            pcl::transformPointCloud(*tmp_ptr, *transformed_tmp,
+                                    submap_affine.matrix().cast<float>());
+            targeted_cloud_ += *transformed_tmp;
         }
 
-        // Simpan submap
+        // Store new submap
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        pcl::toROSMsg(*filtered_cloud, cloud_msg);
+
         SubMap submap;
-        submap.cloud = filtered;
-        submap.pose = pose;
-        submap.distance = 0.0;
-        if (!submaps_.empty()) {
-            Eigen::Vector3f prev = submaps_.back().pose.block<3, 1>(0, 3);
-            Eigen::Vector3f curr = pose.block<3, 1>(0, 3);
-            submap.distance = submaps_.back().distance + (curr - prev).norm();
-        }
+        submap.header.frame_id = global_frame_id_;
+        submap.header.stamp = current_pose_stamped.header.stamp;
+        latest_distance_ += trans_;
+        submap.distance = latest_distance_;
+        submap.pose = current_pose_stamped.pose;
+        submap.cloud = cloud_msg;
+        submap.cloud.header.frame_id = global_frame_id_;
 
         {
             std::lock_guard<std::mutex> lock(map_mutex_);
             submaps_.push_back(submap);
-            targeted_cloud_copy_ = new_targeted;
         }
 
         is_map_updated_ = true;
 
-        RCLCPP_INFO(this->get_logger(), "Submap #%zu (dist: %.2fm, target: %zu pts)",
-                    submaps_.size(), submap.distance, new_targeted.size());
+        // Periodically publish full map
+        rclcpp::Time map_time = clock_.now();
+        double dt = map_time.seconds() - last_map_time_.seconds();
+        if (dt > map_publish_period_) {
+            publishFullMap();
+            last_map_time_ = map_time;
+        }
+
+        RCLCPP_INFO(get_logger(), "Submap #%zu (dist: %.2fm, target: %zu pts)",
+                    submaps_.size(), submap.distance, targeted_cloud_.size());
     }
 
-    // =============== Publish Functions ===============
-    void publishPose(const Eigen::Matrix4f& pose, const rclcpp::Time& stamp) {
-        geometry_msgs::msg::PoseStamped ps;
-        ps.header.stamp = stamp;
-        ps.header.frame_id = global_frame_id_;
-        ps.pose.position.x = pose(0, 3);
-        ps.pose.position.y = pose(1, 3);
-        ps.pose.position.z = pose(2, 3);
-        Eigen::Quaternionf q(Eigen::Matrix3f(pose.block<3, 3>(0, 0)));
-        ps.pose.orientation.x = q.x();
-        ps.pose.orientation.y = q.y();
-        ps.pose.orientation.z = q.z();
-        ps.pose.orientation.w = q.w();
-        path_msg_.poses.push_back(ps);
-        pub_pose_->publish(ps);
+    // =============== Utility: Pose -> Matrix4f ===============
+    Eigen::Matrix4f getTransformation(const geometry_msgs::msg::Pose & pose) {
+        Eigen::Affine3d affine;
+        tf2::fromMsg(pose, affine);
+        return affine.matrix().cast<float>();
     }
 
-    void publishCurrentScan(const PointCloudT::Ptr& cloud,
-                            const Eigen::Matrix4f& pose,
-                            const rclcpp::Time& stamp) {
-        auto out = std::make_shared<PointCloudT>();
-        pcl::transformPointCloud(*cloud, *out, pose);
-        sensor_msgs::msg::PointCloud2 msg;
-        pcl::toROSMsg(*out, msg);
-        msg.header.stamp = stamp;
-        msg.header.frame_id = global_frame_id_;
-        pub_current_scan_->publish(msg);
-    }
-
-    void publishMapCloud(const rclcpp::Time& stamp) {
-        auto full = std::make_shared<PointCloudT>();
+    // =============== Publish Full Map ===============
+    void publishFullMap() {
+        PointCloudT::Ptr map_ptr(new PointCloudT());
         {
             std::lock_guard<std::mutex> lock(map_mutex_);
-            for (const auto& sm : submaps_) {
-                auto tmp = std::make_shared<PointCloudT>();
-                pcl::transformPointCloud(*sm.cloud, *tmp, sm.pose);
-                *full += *tmp;
+            for (const auto & submap : submaps_) {
+                PointCloudT::Ptr submap_cloud(new PointCloudT());
+                PointCloudT::Ptr transformed(new PointCloudT());
+                pcl::fromROSMsg(submap.cloud, *submap_cloud);
+                Eigen::Affine3d affine;
+                tf2::fromMsg(submap.pose, affine);
+                pcl::transformPointCloud(*submap_cloud, *transformed,
+                                        affine.matrix().cast<float>());
+                *map_ptr += *transformed;
             }
         }
-        if (full->empty()) return;
 
-        pcl::VoxelGrid<PointT> vg;
-        vg.setLeafSize(vg_size_map_, vg_size_map_, vg_size_map_);
-        vg.setInputCloud(full);
-        vg.filter(*full);
+        if (map_ptr->empty()) return;
 
-        sensor_msgs::msg::PointCloud2 msg;
-        pcl::toROSMsg(*full, msg);
-        msg.header.stamp = stamp;
-        msg.header.frame_id = global_frame_id_;
-        pub_map_cloud_->publish(msg);
-    }
-
-    void publishTF(const rclcpp::Time& stamp) {
-        if (use_odom_) {
-            try {
-                // lookupTransform(target=odom, source=base) → odom_T_base
-                auto odom_base_tf = tf_buffer_->lookupTransform(
-                    odom_frame_id_, robot_frame_id_, tf2::TimePointZero);
-                Eigen::Affine3d odom_base = tf2::transformToEigen(odom_base_tf);
-                Eigen::Matrix4f odom_T_base = odom_base.matrix().cast<float>();
-
-                // map_T_odom = map_T_base * (odom_T_base)^-1
-                //            = current_pose_ * inv(odom_T_base)
-                Eigen::Matrix4f map_T_odom = current_pose_ * odom_T_base.inverse();
-
-                Eigen::Affine3f affine(map_T_odom);
-                Eigen::Quaternionf q(affine.rotation());
-
-                geometry_msgs::msg::TransformStamped tf_msg;
-                tf_msg.header.stamp = stamp;
-                tf_msg.header.frame_id = global_frame_id_;
-                tf_msg.child_frame_id = odom_frame_id_;
-                tf_msg.transform.translation.x = affine.translation().x();
-                tf_msg.transform.translation.y = affine.translation().y();
-                tf_msg.transform.translation.z = affine.translation().z();
-                tf_msg.transform.rotation.x = q.x();
-                tf_msg.transform.rotation.y = q.y();
-                tf_msg.transform.rotation.z = q.z();
-                tf_msg.transform.rotation.w = q.w();
-
-                tf_broadcaster_->sendTransform(tf_msg);
-            } catch (tf2::TransformException& e) {
-                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                    "map→odom TF error: %s", e.what());
-            }
-        } else {
-            Eigen::Affine3f affine(current_pose_);
-            Eigen::Quaternionf q(affine.rotation());
-
-            geometry_msgs::msg::TransformStamped tf_msg;
-            tf_msg.header.stamp = stamp;
-            tf_msg.header.frame_id = global_frame_id_;
-            tf_msg.child_frame_id = robot_frame_id_;
-            tf_msg.transform.translation.x = affine.translation().x();
-            tf_msg.transform.translation.y = affine.translation().y();
-            tf_msg.transform.translation.z = affine.translation().z();
-            tf_msg.transform.rotation.x = q.x();
-            tf_msg.transform.rotation.y = q.y();
-            tf_msg.transform.rotation.z = q.z();
-            tf_msg.transform.rotation.w = q.w();
-
-            tf_broadcaster_->sendTransform(tf_msg);
-        }
+        RCLCPP_INFO(get_logger(), "publish map, points: %zu", map_ptr->size());
+        sensor_msgs::msg::PointCloud2 map_msg;
+        pcl::toROSMsg(*map_ptr, map_msg);
+        map_msg.header.frame_id = global_frame_id_;
+        map_msg.header.stamp = now();
+        map_pub_->publish(map_msg);
     }
 
     // =============== Save Map ===============
     void saveMap() {
         if (submaps_.empty()) {
-            RCLCPP_WARN(this->get_logger(), "Map kosong.");
+            RCLCPP_WARN(get_logger(), "Map is empty, nothing to save.");
             return;
         }
-        auto full = std::make_shared<PointCloudT>();
-        for (const auto& sm : submaps_) {
-            auto tmp = std::make_shared<PointCloudT>();
-            pcl::transformPointCloud(*sm.cloud, *tmp, sm.pose);
-            *full += *tmp;
+
+        PointCloudT::Ptr full(new PointCloudT());
+        for (const auto & submap : submaps_) {
+            PointCloudT::Ptr cloud(new PointCloudT());
+            PointCloudT::Ptr transformed(new PointCloudT());
+            pcl::fromROSMsg(submap.cloud, *cloud);
+            Eigen::Affine3d affine;
+            tf2::fromMsg(submap.pose, affine);
+            pcl::transformPointCloud(*cloud, *transformed,
+                                    affine.matrix().cast<float>());
+            *full += *transformed;
         }
+
         pcl::VoxelGrid<PointT> vg;
         vg.setInputCloud(full);
-        vg.setLeafSize(vg_size_map_, vg_size_map_, vg_size_map_);
+        vg.setLeafSize(vg_size_for_map_, vg_size_for_map_, vg_size_for_map_);
         vg.filter(*full);
 
         std::string pcd_path = map_save_path_ + ".pcd";
         pcl::io::savePCDFileBinaryCompressed(pcd_path, *full);
-        RCLCPP_INFO(this->get_logger(), "Map saved: %s (%zu pts)", pcd_path.c_str(), full->size());
+        RCLCPP_INFO(get_logger(), "Map saved: %s (%zu pts)", pcd_path.c_str(), full->size());
 
+        // Save trajectory
         std::string traj_path = map_save_path_ + "_trajectory.txt";
         std::ofstream f(traj_path);
-        for (const auto& sm : submaps_) {
-            const auto& p = sm.pose;
-            f << p(0,3) << " " << p(1,3) << " " << p(2,3) << " "
-              << p(0,0) << " " << p(0,1) << " " << p(0,2) << " "
-              << p(1,0) << " " << p(1,1) << " " << p(1,2) << " "
-              << p(2,0) << " " << p(2,1) << " " << p(2,2) << "\n";
+        for (const auto & sm : submaps_) {
+            Eigen::Affine3d affine;
+            tf2::fromMsg(sm.pose, affine);
+            Eigen::Matrix4d m = affine.matrix();
+            f << m(0,3) << " " << m(1,3) << " " << m(2,3) << " "
+              << m(0,0) << " " << m(0,1) << " " << m(0,2) << " "
+              << m(1,0) << " " << m(1,1) << " " << m(1,2) << " "
+              << m(2,0) << " " << m(2,1) << " " << m(2,2) << "\n";
         }
         f.close();
-        RCLCPP_INFO(this->get_logger(), "Trajectory saved: %s (%zu poses)", traj_path.c_str(), submaps_.size());
+        RCLCPP_INFO(get_logger(), "Trajectory saved: %s (%zu poses)",
+                    traj_path.c_str(), submaps_.size());
     }
 
-    void saveMapCallback(const std::shared_ptr<std_srvs::srv::Empty::Request>,
-                         std::shared_ptr<std_srvs::srv::Empty::Response>) {
-        RCLCPP_INFO(this->get_logger(), "Save map requested...");
-        saveMap();
-    }
-
-    // =============== Data ===============
-    struct SubMap {
-        PointCloudT::Ptr cloud;
-        Eigen::Matrix4f pose;
-        double distance;
-    };
-
-    // Params
-    std::string registration_method_, global_frame_id_, robot_frame_id_, odom_frame_id_, map_save_path_;
-    double ndt_resolution_, gicp_corr_dist_, trans_for_mapupdate_;
-    double vg_size_input_, vg_size_map_, map_publish_period_;
-    double scan_min_range_, scan_max_range_, crop_min_z_, crop_max_z_;
+    // =============== Member Variables ===============
+    // Parameters
+    std::string registration_method_;
+    std::string global_frame_id_, robot_frame_id_, odom_frame_id_;
+    std::string input_cloud_topic_, map_save_path_;
+    double trans_for_mapupdate_;
+    double vg_size_for_input_, vg_size_for_map_;
+    bool use_min_max_filter_;
+    double scan_min_range_, scan_max_range_;
+    double map_publish_period_;
     int num_targeted_cloud_;
-    bool use_odom_, publish_tf_;
+    double initial_pose_x_, initial_pose_y_, initial_pose_z_;
+    double initial_pose_qx_, initial_pose_qy_, initial_pose_qz_, initial_pose_qw_;
+    bool set_initial_pose_;
+    bool publish_tf_;
+    bool use_odom_;
+    bool debug_flag_;
 
     // Registration
     pcl::Registration<PointT, PointT>::Ptr registration_;
 
+    // TF2
+    rclcpp::Clock clock_;
+    tf2_ros::Buffer tfbuffer_;
+    tf2_ros::TransformListener listener_;
+    tf2_ros::TransformBroadcaster broadcaster_;
+
     // State
-    bool is_first_frame_ = true;
-    Eigen::Matrix4f current_pose_;
+    bool initial_pose_received_ = false;
+    bool initial_cloud_received_ = false;
+    geometry_msgs::msg::PoseStamped current_pose_stamped_;
+    Eigen::Vector3d previous_position_{Eigen::Vector3d::Zero()};
     Eigen::Matrix4f previous_odom_mat_;
-    Eigen::Matrix4f last_submap_pose_ = Eigen::Matrix4f::Identity();
+    double trans_ = 0.0;
+    double latest_distance_ = 0.0;
 
     // Submaps
     std::vector<SubMap> submaps_;
-    PointCloudT::Ptr targeted_cloud_;
-    PointCloudT targeted_cloud_copy_;
+    PointCloudT targeted_cloud_;
     std::mutex map_mutex_;
 
     // Background mapping
     bool mapping_flag_ = false;
     bool is_map_updated_ = false;
+    std::packaged_task<void()> mapping_task_;
     std::future<void> mapping_future_;
+    std::thread mapping_thread_;
+
+    // Timing
+    rclcpp::Time last_map_time_;
 
     // Path
-    nav_msgs::msg::Path path_msg_;
-    rclcpp::Time last_map_publish_time_;
+    nav_msgs::msg::Path path_;
 
-    // TF
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-
-    // ROS
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_cloud_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_map_cloud_, pub_current_scan_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_;
+    // ROS interfaces
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr initial_pose_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr input_cloud_sub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_map_srv_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<SlamRgbdCam>());
+    rclcpp::NodeOptions options;
+    rclcpp::spin(std::make_shared<SlamRgbdCam>(options));
     rclcpp::shutdown();
     return 0;
 }

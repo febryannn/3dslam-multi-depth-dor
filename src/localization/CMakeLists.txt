@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -28,12 +29,16 @@ add_definitions(${PCL_DEFINITIONS})
 # SLAM RGBD Cam Node (scan-to-submap, arsitektur lidarslam_ros2)
 add_executable(slam_rgbd_cam_node src/slam_rgbd_cam.cpp)
 target_link_libraries(slam_rgbd_cam_node ${PCL_LIBRARIES})
-ament_target_dependencies(slam_rgbd_cam_node rclcpp sensor_msgs geometry_msgs nav_msgs std_srvs tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
+ament_target_dependencies(slam_rgbd_cam_node
+  rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs std_srvs
+  tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
 
-# RGBD Cam Localization Node (ICP-based localization vs pre-built map)
+# RGBD Cam Localization Node (scan matching vs pre-built map)
 add_executable(rgbd_cam_loc_node src/rgbd_cam_loc.cpp)
 target_link_libraries(rgbd_cam_loc_node ${PCL_LIBRARIES})
-ament_target_dependencies(rgbd_cam_loc_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs pcl_conversions)
+ament_target_dependencies(rgbd_cam_loc_node
+  rclcpp sensor_msgs geometry_msgs nav_msgs
+  tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
 
 # Node Penerima UDP Odometry
 add_executable(udp_receiver src/udp_receiver.cpp)
