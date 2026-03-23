@@ -46,6 +46,13 @@
  *   4. GICP/NDT scan-to-submap matching
  *   5. Update submap saat robot bergerak cukup jauh
  *   6. Publish map→odom TF, map cloud, trajectory
+ *
+ * Perbaikan utama:
+ *   - Subscribe /odom topic langsung (bukan TF lookup) untuk initial guess
+ *   - Publish odom→base_link TF sebagai fallback (fix broken TF tree)
+ *   - Fitness score rejection untuk tolak scan matching buruk
+ *   - Parameter GICP disesuaikan untuk RGBD (correspondence dist lebih kecil)
+ *   - Rotation trigger untuk submap update
  */
 class SlamRgbdCam : public rclcpp::Node {
 public:
@@ -55,15 +62,16 @@ public:
     SlamRgbdCam() : Node("slam_rgbd_cam") {
         // --- Parameter ---
         this->declare_parameter("registration_method", "GICP");
-        this->declare_parameter("ndt_resolution", 1.0);
-        this->declare_parameter("gicp_corr_dist_threshold", 5.0);
-        this->declare_parameter("trans_for_mapupdate", 0.5);
-        this->declare_parameter("vg_size_for_input", 0.1);
+        this->declare_parameter("ndt_resolution", 0.5);
+        this->declare_parameter("gicp_corr_dist_threshold", 1.0);
+        this->declare_parameter("trans_for_mapupdate", 0.3);
+        this->declare_parameter("angle_for_mapupdate", 0.3);
+        this->declare_parameter("vg_size_for_input", 0.05);
         this->declare_parameter("vg_size_for_map", 0.05);
-        this->declare_parameter("num_targeted_cloud", 10);
+        this->declare_parameter("num_targeted_cloud", 20);
         this->declare_parameter("map_publish_period", 5.0);
-        this->declare_parameter("scan_min_range", 0.3);
-        this->declare_parameter("scan_max_range", 8.0);
+        this->declare_parameter("scan_min_range", 0.5);
+        this->declare_parameter("scan_max_range", 4.0);
         this->declare_parameter("crop_min_z", -0.3);
         this->declare_parameter("crop_max_z", 2.5);
         this->declare_parameter("use_odom", true);
@@ -73,11 +81,14 @@ public:
         this->declare_parameter("odom_frame_id", "odom");
         this->declare_parameter("map_save_path", "/tmp/slam_map");
         this->declare_parameter("input_cloud_topic", "/full_pointcloud");
+        this->declare_parameter("odom_topic", "/odom");
+        this->declare_parameter("fitness_score_threshold", 0.5);
 
         registration_method_ = this->get_parameter("registration_method").as_string();
         ndt_resolution_ = this->get_parameter("ndt_resolution").as_double();
         gicp_corr_dist_ = this->get_parameter("gicp_corr_dist_threshold").as_double();
         trans_for_mapupdate_ = this->get_parameter("trans_for_mapupdate").as_double();
+        angle_for_mapupdate_ = this->get_parameter("angle_for_mapupdate").as_double();
         vg_size_input_ = this->get_parameter("vg_size_for_input").as_double();
         vg_size_map_ = this->get_parameter("vg_size_for_map").as_double();
         num_targeted_cloud_ = this->get_parameter("num_targeted_cloud").as_int();
@@ -93,6 +104,8 @@ public:
         odom_frame_id_ = this->get_parameter("odom_frame_id").as_string();
         map_save_path_ = this->get_parameter("map_save_path").as_string();
         std::string input_topic = this->get_parameter("input_cloud_topic").as_string();
+        std::string odom_topic = this->get_parameter("odom_topic").as_string();
+        fitness_score_threshold_ = this->get_parameter("fitness_score_threshold").as_double();
 
         // --- Registration algorithm ---
         setupRegistration();
@@ -112,6 +125,13 @@ public:
             input_topic, rclcpp::SensorDataQoS(),
             std::bind(&SlamRgbdCam::cloudCallback, this, std::placeholders::_1));
 
+        // Subscribe /odom langsung (bukan TF lookup) — lebih reliable
+        if (use_odom_) {
+            sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+                odom_topic, rclcpp::QoS(50),
+                std::bind(&SlamRgbdCam::odomCallback, this, std::placeholders::_1));
+        }
+
         pub_map_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
             "/slam/map_cloud", rclcpp::QoS(1).durability_volatile());
         pub_current_scan_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
@@ -127,10 +147,12 @@ public:
         last_map_publish_time_ = this->now();
 
         RCLCPP_INFO(this->get_logger(), "=== 3D SLAM READY (scan-to-submap) ===");
-        RCLCPP_INFO(this->get_logger(), "  Method: %s | Input: %s",
-                    registration_method_.c_str(), input_topic.c_str());
-        RCLCPP_INFO(this->get_logger(), "  Submap trigger: %.2fm | Target submaps: %d",
-                    trans_for_mapupdate_, num_targeted_cloud_);
+        RCLCPP_INFO(this->get_logger(), "  Method: %s | Input: %s | Odom: %s",
+                    registration_method_.c_str(), input_topic.c_str(), odom_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "  GICP corr_dist: %.2f | Fitness threshold: %.2f",
+                    gicp_corr_dist_, fitness_score_threshold_);
+        RCLCPP_INFO(this->get_logger(), "  Submap trigger: %.2fm / %.2frad | Target submaps: %d",
+                    trans_for_mapupdate_, angle_for_mapupdate_, num_targeted_cloud_);
         RCLCPP_INFO(this->get_logger(), "  Save: ros2 service call /slam/save_map std_srvs/srv/Empty");
     }
 
@@ -149,7 +171,7 @@ private:
         } else {
             auto gicp = std::make_shared<pcl::GeneralizedIterativeClosestPoint<PointT, PointT>>();
             gicp->setMaxCorrespondenceDistance(gicp_corr_dist_);
-            gicp->setTransformationEpsilon(1e-8);
+            gicp->setTransformationEpsilon(1e-6);
             gicp->setMaximumIterations(64);
             gicp->setEuclideanFitnessEpsilon(1e-6);
             registration_ = gicp;
@@ -181,6 +203,13 @@ private:
         return filtered;
     }
 
+    // =============== Odom Callback (subscribe /odom langsung) ===============
+    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        latest_odom_ = *msg;
+        has_odom_ = true;
+    }
+
     // =============== Main Callback ===============
     void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
         if (msg->width * msg->height == 0) return;
@@ -190,7 +219,7 @@ private:
         if (raw->empty()) return;
 
         auto cloud = filterCloud(raw);
-        if (cloud->size() < 30) {
+        if (cloud->size() < 50) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
                 "Cloud terlalu sedikit: %zu", cloud->size());
             return;
@@ -209,7 +238,7 @@ private:
 
     // =============== Initialize Map ===============
     void initializeMap(const PointCloudT::Ptr& cloud, const rclcpp::Time& stamp) {
-        RCLCPP_INFO(this->get_logger(), "Membuat map pertama...");
+        RCLCPP_INFO(this->get_logger(), "Membuat map pertama (%zu pts)...", cloud->size());
 
         auto map_cloud = std::make_shared<PointCloudT>();
         pcl::VoxelGrid<PointT> vg;
@@ -217,7 +246,7 @@ private:
         vg.setInputCloud(cloud);
         vg.filter(*map_cloud);
 
-        // Transform ke global (identity)
+        // Transform ke global (identity pada awal)
         auto transformed = std::make_shared<PointCloudT>();
         pcl::transformPointCloud(*map_cloud, *transformed, current_pose_);
 
@@ -261,31 +290,52 @@ private:
         // Set source
         registration_->setInputSource(cloud);
 
-        // Initial guess
+        // Initial guess dari odometry
         Eigen::Matrix4f initial_guess = current_pose_;
         if (use_odom_) {
-            initial_guess = getOdomBasedGuess(stamp);
+            initial_guess = getOdomBasedGuess();
         }
 
         // Align
         auto aligned = std::make_shared<PointCloudT>();
         registration_->align(*aligned, initial_guess);
 
+        bool match_accepted = false;
         if (registration_->hasConverged()) {
-            current_pose_ = registration_->getFinalTransformation();
             double fitness = registration_->getFitnessScore();
-            RCLCPP_DEBUG(this->get_logger(), "Converged. Fitness: %.4f", fitness);
+            Eigen::Matrix4f result = registration_->getFinalTransformation();
+
+            // Reject match jika fitness score terlalu tinggi (bad match)
+            if (fitness < fitness_score_threshold_) {
+                current_pose_ = result;
+                match_accepted = true;
+                RCLCPP_DEBUG(this->get_logger(), "Converged. Fitness: %.4f", fitness);
+            } else {
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                    "Fitness terlalu tinggi: %.4f > %.4f, pakai odom/prev pose",
+                    fitness, fitness_score_threshold_);
+            }
         } else {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 3000,
-                "Scan matching gagal converge, pakai odometry");
-            if (use_odom_) current_pose_ = initial_guess;
+                "Scan matching gagal converge");
         }
 
-        // Cek apakah perlu submap baru
-        Eigen::Vector3f diff = current_pose_.block<3, 1>(0, 3) - last_submap_pose_.block<3, 1>(0, 3);
-        float trans_diff = diff.norm();
+        // Fallback ke initial guess jika match ditolak
+        if (!match_accepted) {
+            current_pose_ = initial_guess;
+        }
 
-        if (trans_diff > trans_for_mapupdate_ && !mapping_flag_) {
+        // Cek apakah perlu submap baru (translasi ATAU rotasi)
+        Eigen::Vector3f trans_diff = current_pose_.block<3, 1>(0, 3) - last_submap_pose_.block<3, 1>(0, 3);
+        float dist = trans_diff.norm();
+
+        // Hitung perbedaan rotasi
+        Eigen::Matrix3f rot_diff = last_submap_pose_.block<3, 3>(0, 0).transpose() *
+                                    current_pose_.block<3, 3>(0, 0);
+        float angle = std::acos(std::min(1.0f, std::max(-1.0f,
+            (rot_diff.trace() - 1.0f) / 2.0f)));
+
+        if ((dist > trans_for_mapupdate_ || angle > angle_for_mapupdate_) && !mapping_flag_) {
             last_submap_pose_ = current_pose_;
             mapping_flag_ = true;
             auto cloud_copy = std::make_shared<PointCloudT>(*cloud);
@@ -308,25 +358,30 @@ private:
         pub_path_->publish(path_msg_);
     }
 
-    // =============== Odometry Initial Guess ===============
-    Eigen::Matrix4f getOdomBasedGuess(const rclcpp::Time& /*stamp*/) {
-        try {
-            auto odom_tf = tf_buffer_->lookupTransform(
-                odom_frame_id_, robot_frame_id_, tf2::TimePointZero);
-            Eigen::Affine3d odom_affine = tf2::transformToEigen(odom_tf);
-            Eigen::Matrix4f odom_mat = odom_affine.matrix().cast<float>();
+    // =============== Odometry Initial Guess (dari /odom topic) ===============
+    Eigen::Matrix4f getOdomBasedGuess() {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        if (!has_odom_) return current_pose_;
 
-            if (has_previous_odom_) {
-                Eigen::Matrix4f delta = previous_odom_mat_.inverse() * odom_mat;
-                previous_odom_mat_ = odom_mat;
-                return current_pose_ * delta;
-            }
+        // Konversi odom message ke matrix
+        const auto& pos = latest_odom_.pose.pose.position;
+        const auto& ori = latest_odom_.pose.pose.orientation;
+
+        Eigen::Quaternionf q(ori.w, ori.x, ori.y, ori.z);
+        Eigen::Matrix4f odom_mat = Eigen::Matrix4f::Identity();
+        odom_mat.block<3, 3>(0, 0) = q.toRotationMatrix();
+        odom_mat(0, 3) = pos.x;
+        odom_mat(1, 3) = pos.y;
+        odom_mat(2, 3) = pos.z;
+
+        if (has_previous_odom_) {
+            Eigen::Matrix4f delta = previous_odom_mat_.inverse() * odom_mat;
             previous_odom_mat_ = odom_mat;
-            has_previous_odom_ = true;
-        } catch (tf2::TransformException& e) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                "Odom TF gagal: %s", e.what());
+            return current_pose_ * delta;
         }
+
+        previous_odom_mat_ = odom_mat;
+        has_previous_odom_ = true;
         return current_pose_;
     }
 
@@ -433,25 +488,68 @@ private:
     }
 
     void publishTF(const rclcpp::Time& stamp) {
+        // Selalu publish odom→base_link dari /odom data
+        // (fallback karena Gazebo bridge sering gagal forward TF)
+        {
+            std::lock_guard<std::mutex> lock(odom_mutex_);
+            if (has_odom_) {
+                const auto& pos = latest_odom_.pose.pose.position;
+                const auto& ori = latest_odom_.pose.pose.orientation;
+
+                geometry_msgs::msg::TransformStamped odom_tf;
+                odom_tf.header.stamp = stamp;
+                odom_tf.header.frame_id = odom_frame_id_;
+                odom_tf.child_frame_id = robot_frame_id_;
+                odom_tf.transform.translation.x = pos.x;
+                odom_tf.transform.translation.y = pos.y;
+                odom_tf.transform.translation.z = pos.z;
+                odom_tf.transform.rotation = ori;
+                tf_broadcaster_->sendTransform(odom_tf);
+            }
+        }
+
         if (use_odom_) {
-            try {
-                // lookupTransform(target=odom, source=base) → odom_T_base
-                auto odom_base_tf = tf_buffer_->lookupTransform(
-                    odom_frame_id_, robot_frame_id_, tf2::TimePointZero);
-                Eigen::Affine3d odom_base = tf2::transformToEigen(odom_base_tf);
-                Eigen::Matrix4f odom_T_base = odom_base.matrix().cast<float>();
+            // Compute map→odom dari stored odom data
+            std::lock_guard<std::mutex> lock(odom_mutex_);
+            if (has_odom_) {
+                const auto& pos = latest_odom_.pose.pose.position;
+                const auto& ori = latest_odom_.pose.pose.orientation;
+
+                Eigen::Quaternionf q(ori.w, ori.x, ori.y, ori.z);
+                Eigen::Matrix4f odom_T_base = Eigen::Matrix4f::Identity();
+                odom_T_base.block<3, 3>(0, 0) = q.toRotationMatrix();
+                odom_T_base(0, 3) = pos.x;
+                odom_T_base(1, 3) = pos.y;
+                odom_T_base(2, 3) = pos.z;
 
                 // map_T_odom = map_T_base * (odom_T_base)^-1
-                //            = current_pose_ * inv(odom_T_base)
                 Eigen::Matrix4f map_T_odom = current_pose_ * odom_T_base.inverse();
 
                 Eigen::Affine3f affine(map_T_odom);
-                Eigen::Quaternionf q(affine.rotation());
+                Eigen::Quaternionf q_out(affine.rotation());
 
                 geometry_msgs::msg::TransformStamped tf_msg;
                 tf_msg.header.stamp = stamp;
                 tf_msg.header.frame_id = global_frame_id_;
                 tf_msg.child_frame_id = odom_frame_id_;
+                tf_msg.transform.translation.x = affine.translation().x();
+                tf_msg.transform.translation.y = affine.translation().y();
+                tf_msg.transform.translation.z = affine.translation().z();
+                tf_msg.transform.rotation.x = q_out.x();
+                tf_msg.transform.rotation.y = q_out.y();
+                tf_msg.transform.rotation.z = q_out.z();
+                tf_msg.transform.rotation.w = q_out.w();
+
+                tf_broadcaster_->sendTransform(tf_msg);
+            } else {
+                // Belum ada odom, publish map→base_link langsung
+                Eigen::Affine3f affine(current_pose_);
+                Eigen::Quaternionf q(affine.rotation());
+
+                geometry_msgs::msg::TransformStamped tf_msg;
+                tf_msg.header.stamp = stamp;
+                tf_msg.header.frame_id = global_frame_id_;
+                tf_msg.child_frame_id = robot_frame_id_;
                 tf_msg.transform.translation.x = affine.translation().x();
                 tf_msg.transform.translation.y = affine.translation().y();
                 tf_msg.transform.translation.z = affine.translation().z();
@@ -461,9 +559,6 @@ private:
                 tf_msg.transform.rotation.w = q.w();
 
                 tf_broadcaster_->sendTransform(tf_msg);
-            } catch (tf2::TransformException& e) {
-                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                    "map→odom TF error: %s", e.what());
             }
         } else {
             Eigen::Affine3f affine(current_pose_);
@@ -535,9 +630,10 @@ private:
 
     // Params
     std::string registration_method_, global_frame_id_, robot_frame_id_, odom_frame_id_, map_save_path_;
-    double ndt_resolution_, gicp_corr_dist_, trans_for_mapupdate_;
+    double ndt_resolution_, gicp_corr_dist_, trans_for_mapupdate_, angle_for_mapupdate_;
     double vg_size_input_, vg_size_map_, map_publish_period_;
     double scan_min_range_, scan_max_range_, crop_min_z_, crop_max_z_;
+    double fitness_score_threshold_;
     int num_targeted_cloud_;
     bool use_odom_, publish_tf_;
 
@@ -550,6 +646,11 @@ private:
     Eigen::Matrix4f previous_odom_mat_;
     bool has_previous_odom_ = false;
     Eigen::Matrix4f last_submap_pose_ = Eigen::Matrix4f::Identity();
+
+    // Odometry (subscribe /odom topic langsung)
+    nav_msgs::msg::Odometry latest_odom_;
+    std::mutex odom_mutex_;
+    bool has_odom_ = false;
 
     // Submaps
     std::vector<SubMap> submaps_;
@@ -572,6 +673,7 @@ private:
 
     // ROS
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_cloud_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_map_cloud_, pub_current_scan_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_;
