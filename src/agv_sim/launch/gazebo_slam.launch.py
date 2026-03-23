@@ -181,6 +181,12 @@ def generate_launch_description():
                         'map_save_path': map_save_path,
                     },
                 ],
+                remappings=[
+                    ('current_pose', '/slam/pose'),
+                    ('map', '/slam/map_cloud'),
+                    ('current_scan', '/slam/current_scan'),
+                    ('path', '/slam/trajectory'),
+                ],
                 output='screen',
             ),
         ],

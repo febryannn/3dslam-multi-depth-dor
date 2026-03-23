@@ -46,6 +46,7 @@ def generate_launch_description():
             ('input_cloud', '/full_pointcloud'),
             ('current_pose', '/slam/pose'),
             ('map', '/slam/map_cloud'),
+            ('current_scan', '/slam/current_scan'),
             ('path', '/slam/trajectory'),
         ],
         output='screen',

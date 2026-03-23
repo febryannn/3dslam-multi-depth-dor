@@ -308,6 +308,8 @@ private:
             "current_pose", rclcpp::QoS(10));
         map_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
             "map", rclcpp::QoS(10));
+        current_scan_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+            "current_scan", rclcpp::QoS(10));
         path_pub_ = create_publisher<nav_msgs::msg::Path>(
             "path", rclcpp::QoS(10));
 
@@ -504,6 +506,17 @@ private:
         current_pose_stamped_.pose.position.z = position.z();
         current_pose_stamped_.pose.orientation = quat_msg;
         pose_pub_->publish(current_pose_stamped_);
+
+        // Publish current scan (transformed to map frame)
+        {
+            PointCloudT::Ptr scan_in_map(new PointCloudT());
+            pcl::transformPointCloud(*cloud_ptr, *scan_in_map, final_transformation);
+            sensor_msgs::msg::PointCloud2 scan_msg;
+            pcl::toROSMsg(*scan_in_map, scan_msg);
+            scan_msg.header.stamp = stamp;
+            scan_msg.header.frame_id = global_frame_id_;
+            current_scan_pub_->publish(scan_msg);
+        }
 
         // Update path
         path_.poses.push_back(current_pose_stamped_);
@@ -768,6 +781,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr input_cloud_sub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr current_scan_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_map_srv_;
 };
