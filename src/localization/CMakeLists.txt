@@ -15,7 +15,6 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation registration)
@@ -31,18 +30,18 @@ add_executable(slam_rgbd_cam_node src/slam_rgbd_cam.cpp)
 target_link_libraries(slam_rgbd_cam_node ${PCL_LIBRARIES})
 ament_target_dependencies(slam_rgbd_cam_node
   rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs std_srvs
-  tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
+  tf2 tf2_ros tf2_eigen pcl_conversions)
 
 # RGBD Cam Localization Node (scan matching vs pre-built map)
 add_executable(rgbd_cam_loc_node src/rgbd_cam_loc.cpp)
 target_link_libraries(rgbd_cam_loc_node ${PCL_LIBRARIES})
 ament_target_dependencies(rgbd_cam_loc_node
   rclcpp sensor_msgs geometry_msgs nav_msgs
-  tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
+  tf2 tf2_ros tf2_eigen pcl_conversions)
 
 # Node Penerima UDP Odometry
 add_executable(udp_receiver src/udp_receiver.cpp)
-ament_target_dependencies(udp_receiver rclcpp nav_msgs tf2 tf2_ros tf2_geometry_msgs)
+ament_target_dependencies(udp_receiver rclcpp nav_msgs tf2)
 
 # Install targets
 install(TARGETS

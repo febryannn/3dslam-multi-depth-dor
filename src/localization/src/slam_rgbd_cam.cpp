@@ -21,9 +21,6 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/convert.h>
-#include <tf2/impl/convert.h>
-#include <tf2/transform_datatypes.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
 #include <pcl/point_cloud.h>
@@ -442,9 +439,9 @@ private:
 
         // Debug output
         if (debug_flag_) {
-            tf2::Quaternion quat_tf;
             double roll, pitch, yaw;
-            tf2::fromMsg(current_pose_stamped_.pose.orientation, quat_tf);
+            auto & o = current_pose_stamped_.pose.orientation;
+            tf2::Quaternion quat_tf(o.x, o.y, o.z, o.w);
             tf2::Matrix3x3(quat_tf).getRPY(roll, pitch, yaw);
 
             std::cout << "---------------------------------------------------------" << std::endl;
@@ -528,31 +525,36 @@ private:
     }
 
     // =============== Calculate map->odom Transform ===============
-    // Follows lidarslam_ros2 calculateMaptoOdomTransform pattern
+    // map_T_odom = map_T_base * inv(odom_T_base)
+    // Uses pure Eigen math to avoid tf2_geometry_msgs doTransform linkage issues
     geometry_msgs::msg::TransformStamped calculateMapToOdomTransform(
         const geometry_msgs::msg::TransformStamped & base_to_map_msg,
         const rclcpp::Time stamp)
     {
         geometry_msgs::msg::TransformStamped odom_to_map_msg;
         try {
-            geometry_msgs::msg::PoseStamped odom_to_map;
-            geometry_msgs::msg::PoseStamped base_to_map;
+            // Get odom->base_link transform
+            auto odom_base_tf = tfbuffer_.lookupTransform(
+                odom_frame_id_, robot_frame_id_, tf2::TimePointZero);
+            Eigen::Affine3d odom_T_base = tf2::transformToEigen(odom_base_tf);
 
-            tf2::Transform base_to_map_msg_tf;
-            base_to_map.header.frame_id = robot_frame_id_;
-            tf2::fromMsg(base_to_map_msg.transform, base_to_map_msg_tf);
-            tf2::toMsg(base_to_map_msg_tf.inverse(), base_to_map.pose);
+            // Get map->base_link from the SLAM result
+            Eigen::Affine3d map_T_base = tf2::transformToEigen(base_to_map_msg);
 
-            tfbuffer_.transform(base_to_map, odom_to_map, odom_frame_id_);
-
-            tf2::Transform odom_to_map_tf;
-            tf2::impl::Converter<true, false>::convert(odom_to_map.pose, odom_to_map_tf);
-            tf2::impl::Converter<false, true>::convert(
-                odom_to_map_tf.inverse(), odom_to_map_msg.transform);
+            // map_T_odom = map_T_base * inv(odom_T_base)
+            Eigen::Affine3d map_T_odom = map_T_base * odom_T_base.inverse();
+            Eigen::Quaterniond q(map_T_odom.rotation());
 
             odom_to_map_msg.header.stamp = stamp;
             odom_to_map_msg.header.frame_id = global_frame_id_;
             odom_to_map_msg.child_frame_id = odom_frame_id_;
+            odom_to_map_msg.transform.translation.x = map_T_odom.translation().x();
+            odom_to_map_msg.transform.translation.y = map_T_odom.translation().y();
+            odom_to_map_msg.transform.translation.z = map_T_odom.translation().z();
+            odom_to_map_msg.transform.rotation.x = q.x();
+            odom_to_map_msg.transform.rotation.y = q.y();
+            odom_to_map_msg.transform.rotation.z = q.z();
+            odom_to_map_msg.transform.rotation.w = q.w();
         } catch (tf2::TransformException & e) {
             RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
                 "Transform from base_link to odom failed: %s", e.what());
