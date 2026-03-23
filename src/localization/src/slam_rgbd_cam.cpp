@@ -245,29 +245,30 @@ private:
                     return;
                 }
 
-                sensor_msgs::msg::PointCloud2 transformed_msg;
-                try {
-                    tf2::TimePoint time_point = tf2::TimePoint(
-                        std::chrono::seconds(msg->header.stamp.sec) +
-                        std::chrono::nanoseconds(msg->header.stamp.nanosec));
-                    const geometry_msgs::msg::TransformStamped transform =
-                        tfbuffer_.lookupTransform(
-                            robot_frame_id_, msg->header.frame_id, time_point);
-                    tf2::doTransform(*msg, transformed_msg, transform);
-                } catch (tf2::TransformException & e) {
-                    // If frame is already robot_frame, use as-is
-                    if (msg->header.frame_id == robot_frame_id_) {
-                        transformed_msg = *msg;
-                    } else {
+                PointCloudT::Ptr tmp_ptr(new PointCloudT());
+                pcl::fromROSMsg(*msg, *tmp_ptr);
+                if (tmp_ptr->empty()) return;
+
+                // Transform to robot_frame if needed
+                if (msg->header.frame_id != robot_frame_id_) {
+                    try {
+                        tf2::TimePoint time_point = tf2::TimePoint(
+                            std::chrono::seconds(msg->header.stamp.sec) +
+                            std::chrono::nanoseconds(msg->header.stamp.nanosec));
+                        const geometry_msgs::msg::TransformStamped transform =
+                            tfbuffer_.lookupTransform(
+                                robot_frame_id_, msg->header.frame_id, time_point);
+                        Eigen::Affine3d affine = tf2::transformToEigen(transform);
+                        PointCloudT::Ptr transformed(new PointCloudT());
+                        pcl::transformPointCloud(*tmp_ptr, *transformed,
+                                                affine.matrix().cast<float>());
+                        tmp_ptr = transformed;
+                    } catch (tf2::TransformException & e) {
                         RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
                             "TF transform failed: %s", e.what());
                         return;
                     }
                 }
-
-                PointCloudT::Ptr tmp_ptr(new PointCloudT());
-                pcl::fromROSMsg(transformed_msg, *tmp_ptr);
-                if (tmp_ptr->empty()) return;
 
                 // Min/max range filter
                 if (use_min_max_filter_) {

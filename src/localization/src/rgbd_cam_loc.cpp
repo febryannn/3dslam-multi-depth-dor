@@ -186,26 +186,27 @@ private:
     void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
         if (!map_loaded_ || msg->width * msg->height == 0 || !odom_received_) return;
 
-        // Transform cloud to robot frame if needed
-        sensor_msgs::msg::PointCloud2 transformed_msg;
-        try {
-            tf2::TimePoint time_point = tf2::TimePoint(
-                std::chrono::seconds(msg->header.stamp.sec) +
-                std::chrono::nanoseconds(msg->header.stamp.nanosec));
-            const geometry_msgs::msg::TransformStamped transform =
-                tfbuffer_.lookupTransform(robot_frame_id_, msg->header.frame_id, time_point);
-            tf2::doTransform(*msg, transformed_msg, transform);
-        } catch (tf2::TransformException &) {
-            if (msg->header.frame_id == robot_frame_id_) {
-                transformed_msg = *msg;
-            } else {
+        PointCloudT::Ptr cloud(new PointCloudT());
+        pcl::fromROSMsg(*msg, *cloud);
+        if (cloud->empty()) return;
+
+        // Transform to robot_frame if needed
+        if (msg->header.frame_id != robot_frame_id_) {
+            try {
+                tf2::TimePoint time_point = tf2::TimePoint(
+                    std::chrono::seconds(msg->header.stamp.sec) +
+                    std::chrono::nanoseconds(msg->header.stamp.nanosec));
+                const geometry_msgs::msg::TransformStamped transform =
+                    tfbuffer_.lookupTransform(robot_frame_id_, msg->header.frame_id, time_point);
+                Eigen::Affine3d affine = tf2::transformToEigen(transform);
+                PointCloudT::Ptr transformed(new PointCloudT());
+                pcl::transformPointCloud(*cloud, *transformed,
+                                        affine.matrix().cast<float>());
+                cloud = transformed;
+            } catch (tf2::TransformException &) {
                 return;
             }
         }
-
-        PointCloudT::Ptr cloud(new PointCloudT());
-        pcl::fromROSMsg(transformed_msg, *cloud);
-        if (cloud->empty()) return;
 
         // Range filter
         if (use_min_max_filter_) {
