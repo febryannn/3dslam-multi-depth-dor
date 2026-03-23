@@ -6,6 +6,7 @@
 #include <thread>
 #include <future>
 #include <fstream>
+#include <atomic>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
@@ -97,10 +98,9 @@ public:
         setupRegistration();
 
         // --- Init ---
-        targeted_cloud_.reset(new PointCloudT());
         path_msg_.header.frame_id = global_frame_id_;
         current_pose_ = Eigen::Matrix4f::Identity();
-        previous_odom_mat_ = Eigen::Matrix4f::Zero();
+        previous_odom_mat_ = Eigen::Matrix4f::Identity();
 
         // --- TF ---
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -229,8 +229,6 @@ private:
         submap.distance = 0.0;
         submaps_.push_back(submap);
 
-        *targeted_cloud_ = *transformed;
-
         publishPose(current_pose_, stamp);
         publishMapCloud(stamp);
         if (publish_tf_) publishTF(stamp);
@@ -318,12 +316,13 @@ private:
             Eigen::Affine3d odom_affine = tf2::transformToEigen(odom_tf);
             Eigen::Matrix4f odom_mat = odom_affine.matrix().cast<float>();
 
-            if (previous_odom_mat_ != Eigen::Matrix4f::Zero()) {
+            if (has_previous_odom_) {
                 Eigen::Matrix4f delta = previous_odom_mat_.inverse() * odom_mat;
                 previous_odom_mat_ = odom_mat;
                 return current_pose_ * delta;
             }
             previous_odom_mat_ = odom_mat;
+            has_previous_odom_ = true;
         } catch (tf2::TransformException& e) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
                 "Odom TF gagal: %s", e.what());
@@ -488,6 +487,7 @@ private:
 
     // =============== Save Map ===============
     void saveMap() {
+        std::lock_guard<std::mutex> lock(map_mutex_);
         if (submaps_.empty()) {
             RCLCPP_WARN(this->get_logger(), "Map kosong.");
             return;
@@ -548,17 +548,17 @@ private:
     bool is_first_frame_ = true;
     Eigen::Matrix4f current_pose_;
     Eigen::Matrix4f previous_odom_mat_;
+    bool has_previous_odom_ = false;
     Eigen::Matrix4f last_submap_pose_ = Eigen::Matrix4f::Identity();
 
     // Submaps
     std::vector<SubMap> submaps_;
-    PointCloudT::Ptr targeted_cloud_;
     PointCloudT targeted_cloud_copy_;
     std::mutex map_mutex_;
 
     // Background mapping
-    bool mapping_flag_ = false;
-    bool is_map_updated_ = false;
+    std::atomic<bool> mapping_flag_{false};
+    std::atomic<bool> is_map_updated_{false};
     std::future<void> mapping_future_;
 
     // Path
