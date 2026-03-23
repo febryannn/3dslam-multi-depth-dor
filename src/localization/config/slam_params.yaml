@@ -5,18 +5,21 @@ slam_rgbd_cam:
   ros__parameters:
     # === Registration (Scan Matching) ===
     registration_method: "GICP"       # "GICP" atau "NDT"
-    ndt_resolution: 1.0               # NDT grid resolution (meter)
-    gicp_corr_dist_threshold: 5.0     # GICP max correspondence distance (meter)
+    ndt_resolution: 0.5               # NDT grid resolution (meter)
+    gicp_corr_dist_threshold: 1.0     # GICP max correspondence distance (meter)
+                                      # PENTING: harus << max range sensor
+    fitness_score_threshold: 0.5      # Tolak match jika fitness > threshold
 
     # === Submap Management ===
-    trans_for_mapupdate: 0.5          # Jarak translasi trigger submap baru (meter)
-    num_targeted_cloud: 10            # Jumlah submap terakhir untuk target matching
+    trans_for_mapupdate: 0.3          # Jarak translasi trigger submap baru (meter)
+    angle_for_mapupdate: 0.3          # Sudut rotasi trigger submap baru (radian, ~17 deg)
+    num_targeted_cloud: 20            # Jumlah submap terakhir untuk target matching
 
     # === Filtering ===
-    vg_size_for_input: 0.1            # Voxel grid untuk input cloud (meter)
+    vg_size_for_input: 0.05           # Voxel grid untuk input cloud (meter)
     vg_size_for_map: 0.05             # Voxel grid untuk map cloud (meter)
-    scan_min_range: 0.8               # Jarak minimum valid (meter) - Kinect V1
-    scan_max_range: 4.5               # Jarak maksimum valid (meter) - Kinect V1
+    scan_min_range: 0.5               # Jarak minimum valid (meter) - Kinect V1
+    scan_max_range: 4.0               # Jarak maksimum valid (meter) - Kinect V1
     crop_min_z: -0.3                  # Batas bawah Z
     crop_max_z: 2.5                   # Batas atas Z
 
@@ -25,13 +28,14 @@ slam_rgbd_cam:
 
     # === TF & Frames ===
     use_odom: true                    # Gunakan odometry sebagai initial guess
-    publish_tf: true                  # Publish map→odom TF
+    publish_tf: true                  # Publish map→odom + odom→base_link TF
     global_frame_id: "map"
     robot_frame_id: "base_link"
     odom_frame_id: "odom"
 
     # === Input ===
     input_cloud_topic: "/full_pointcloud"  # Topic dari pointcloud_concatenate
+    odom_topic: "/odom"                    # Topic odometry (subscribe langsung)
 
     # === Map Saving ===
     map_save_path: "/tmp/slam_map"    # Path untuk save map (.pcd + _trajectory.txt)
