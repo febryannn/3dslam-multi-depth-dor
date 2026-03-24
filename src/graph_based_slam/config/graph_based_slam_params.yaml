@@ -1,0 +1,14 @@
+graph_based_slam:
+  ros__parameters:
+    registration_method: "NDT"
+    voxel_leaf_size: 0.2
+    ndt_resolution: 5.0
+    ndt_num_threads: 0
+    loop_detection_period: 1000
+    threshold_loop_closure_score: 1.0
+    distance_loop_closure: 20.0
+    range_of_searching_loop_closure: 20.0
+    search_submap_num: 3
+    num_adjacent_pose_cnstraints: 5
+    use_save_map_in_loop: true
+    debug_flag: false
