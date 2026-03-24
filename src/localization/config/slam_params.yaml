@@ -39,3 +39,13 @@ slam_rgbd_cam:
 
     # === Map Saving ===
     map_save_path: "/tmp/slam_map"    # Path untuk save map (.pcd + _trajectory.txt)
+
+    # === Loop Closure + G2O Backend (ala lidarslam_ros2) ===
+    enable_loop_closure: true
+    loop_detection_period: 1000             # Timer period (ms) - cek loop tiap 1 detik
+    threshold_loop_closure_score: 1.0       # Max fitness score untuk terima loop closure
+    distance_loop_closure: 20.0             # Min jarak tempuh (m) sebelum cari loop
+    range_of_searching_loop_closure: 20.0   # Max jarak Euclidean (m) untuk kandidat loop
+    search_submap_num: 3                    # Jumlah submap adjacent sebagai target matching
+    num_adjacent_pose_cnstraints: 5         # Jumlah edge adjacent dalam pose graph
+    g2o_iterations: 10                      # Iterasi optimasi g2o
