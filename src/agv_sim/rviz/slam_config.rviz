@@ -70,27 +70,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /slam/map_cloud
-      Use Fixed Frame: true
-
-    # ==========================================
-    # CURRENT SCAN (YELLOW)
-    # ==========================================
-    - Alpha: 0.8
-      Autocompute Intensity Bounds: true
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 0
-      Color Transformer: FlatColor
-      Enabled: true
-      Name: Current Scan
-      Size (Pixels): 2
-      Style: Points
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /slam/current_scan
+        Value: /scanmatching_slam/map
       Use Fixed Frame: true
 
     # ==========================================
@@ -105,7 +85,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /slam/trajectory
+        Value: /scanmatching_slam/path
       Line Style:
         Line Width: 0.03
         Value: Lines
@@ -126,7 +106,44 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /slam/pose
+        Value: /scanmatching_slam/current_pose
+
+    # ==========================================
+    # MODIFIED PATH (CYAN) - from graph_based_slam
+    # ==========================================
+    - Class: rviz_default_plugins/Path
+      Color: 0; 255; 255
+      Enabled: true
+      Name: Optimized Path
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /graph_based_slam/modified_path
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+
+    # ==========================================
+    # MODIFIED MAP (MAGENTA) - from graph_based_slam
+    # ==========================================
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 100; 255
+      Color Transformer: FlatColor
+      Enabled: true
+      Name: Optimized Map
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /graph_based_slam/modified_map
+      Use Fixed Frame: true
 
     # ==========================================
     # OCCUPANCY GRID
@@ -162,6 +179,26 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /full_pointcloud
+      Use Fixed Frame: true
+
+    # ==========================================
+    # FILTERED CLOUD (ORANGE) - Debug
+    # ==========================================
+    - Alpha: 0.6
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 165; 0
+      Color Transformer: FlatColor
+      Enabled: false
+      Name: Filtered Cloud (Debug)
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /filtered_pointcloud
       Use Fixed Frame: true
 
     # ==========================================

@@ -1,0 +1,11 @@
+dynamic_object_removal:
+  ros__parameters:
+    input_topic: "/full_pointcloud"
+    output_topic: "/filtered_pointcloud"
+    octree_resolution: 0.1
+    noise_filter_min_neighbors: 5
+    voxel_size: 0.05
+    scan_min_range: 0.5
+    scan_max_range: 4.0
+    dynamic_removal_enabled: true
+    buffer_size: 3
