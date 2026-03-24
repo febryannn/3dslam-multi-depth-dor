@@ -45,7 +45,7 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
     auto ndt = std::make_shared<pclomp::NormalDistributionsTransform<PointT, PointT>>();
     ndt->setResolution(ndt_resolution_);
     ndt->setTransformationEpsilon(0.01);
-    ndt->setMaximumIterations(64);
+    ndt->setMaximumIterations(30);
     if (ndt_num_threads_ > 0) {
       ndt->setNumThreads(ndt_num_threads_);
     }
@@ -237,6 +237,9 @@ void ScanMatchingComponent::receiveCloud(PointCloudT::Ptr cloud, const rclcpp::T
   }
 
   // Perform scan matching
+  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
+    "Aligning cloud (%zu pts) against target (%zu pts)",
+    cloud->size(), target_downsampled->size());
   PointCloudT::Ptr result(new PointCloudT);
   registration_->align(*result, initial_guess);
 
@@ -245,6 +248,8 @@ void ScanMatchingComponent::receiveCloud(PointCloudT::Ptr cloud, const rclcpp::T
       registration_->getFitnessScore());
     return;
   }
+  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+    "Scan matched (score=%.3f)", registration_->getFitnessScore());
 
   Eigen::Matrix4f matched_pose = registration_->getFinalTransformation();
 
