@@ -400,13 +400,21 @@ void ScanMatchingComponent::publishMapAndPose(
 
       Eigen::Matrix4f map_to_odom = pose * odom_to_base.inverse();
       Eigen::Isometry3d map_to_odom_iso(map_to_odom.cast<double>());
-      transform.transform = tf2::toMsg(map_to_odom_iso);
+      geometry_msgs::msg::Pose pose_msg = tf2::toMsg(map_to_odom_iso);
+      transform.transform.translation.x = pose_msg.position.x;
+      transform.transform.translation.y = pose_msg.position.y;
+      transform.transform.translation.z = pose_msg.position.z;
+      transform.transform.rotation = pose_msg.orientation;
     } else {
       // Publish map -> base_link directly
       transform.header.frame_id = global_frame_id_;
       transform.child_frame_id = robot_frame_id_;
       Eigen::Isometry3d tf_iso(pose.cast<double>());
-      transform.transform = tf2::toMsg(tf_iso);
+      geometry_msgs::msg::Pose pose_msg2 = tf2::toMsg(tf_iso);
+      transform.transform.translation.x = pose_msg2.position.x;
+      transform.transform.translation.y = pose_msg2.position.y;
+      transform.transform.translation.z = pose_msg2.position.z;
+      transform.transform.rotation = pose_msg2.orientation;
     }
 
     broadcaster_->sendTransform(transform);
