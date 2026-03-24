@@ -18,16 +18,23 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation registration)
+find_package(g2o REQUIRED)
 
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
+  ${G2O_INCLUDE_DIRS}
 )
 add_definitions(${PCL_DEFINITIONS})
 
-# SLAM RGBD Cam Node (scan-to-submap, arsitektur lidarslam_ros2)
+# SLAM RGBD Cam Node (scan-to-submap + g2o backend loop closure)
 add_executable(slam_rgbd_cam_node src/slam_rgbd_cam.cpp)
-target_link_libraries(slam_rgbd_cam_node ${PCL_LIBRARIES})
+target_link_libraries(slam_rgbd_cam_node
+  ${PCL_LIBRARIES}
+  g2o::core
+  g2o::solver_eigen
+  g2o::types_slam3d
+)
 ament_target_dependencies(slam_rgbd_cam_node rclcpp sensor_msgs geometry_msgs nav_msgs std_srvs tf2 tf2_ros tf2_geometry_msgs tf2_eigen pcl_conversions)
 
 # RGBD Cam Localization Node (ICP-based localization vs pre-built map)
