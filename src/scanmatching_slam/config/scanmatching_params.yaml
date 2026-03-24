@@ -1,12 +1,12 @@
 scanmatching_slam:
   ros__parameters:
     registration_method: "NDT"
-    ndt_resolution: 1.0
+    ndt_resolution: 0.5
     ndt_num_threads: 4
     gicp_corr_dist: 1.0
-    trans_for_mapupdate: 0.3
-    vg_size_for_input: 0.2
-    vg_size_for_map: 0.1
+    trans_for_mapupdate: 0.5
+    vg_size_for_input: 0.05
+    vg_size_for_map: 0.05
     scan_min_range: 0.3
     scan_max_range: 4.0
     num_targeted_cloud: 10

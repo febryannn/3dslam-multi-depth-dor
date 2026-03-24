@@ -44,8 +44,8 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
   if (registration_method_ == "NDT") {
     auto ndt = std::make_shared<pclomp::NormalDistributionsTransform<PointT, PointT>>();
     ndt->setResolution(ndt_resolution_);
-    ndt->setTransformationEpsilon(0.01);
-    ndt->setMaximumIterations(30);
+    ndt->setTransformationEpsilon(0.001);
+    ndt->setMaximumIterations(35);
     if (ndt_num_threads_ > 0) {
       ndt->setNumThreads(ndt_num_threads_);
     }
