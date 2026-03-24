@@ -15,7 +15,7 @@
 class DynamicObjectRemoval : public rclcpp::Node
 {
 public:
-    using PointT = pcl::PointXYZI;
+    using PointT = pcl::PointXYZ;
     using PointCloudT = pcl::PointCloud<PointT>;
 
     DynamicObjectRemoval()

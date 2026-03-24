@@ -33,7 +33,7 @@
 namespace scanmatching_slam
 {
 
-using PointT = pcl::PointXYZI;
+using PointT = pcl::PointXYZ;
 using PointCloudT = pcl::PointCloud<PointT>;
 
 class ScanMatchingComponent : public rclcpp::Node

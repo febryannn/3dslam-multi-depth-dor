@@ -50,8 +50,8 @@ GraphBasedSlamComponent::GraphBasedSlamComponent(const rclcpp::NodeOptions & opt
 
   // Setup registration
   if (registration_method_ == "NDT") {
-    auto ndt = pcl::make_shared<pclomp::NormalDistributionsTransform<pcl::PointXYZI,
-        pcl::PointXYZI>>();
+    auto ndt = pcl::make_shared<pclomp::NormalDistributionsTransform<pcl::PointXYZ,
+        pcl::PointXYZ>>();
     ndt->setResolution(ndt_resolution_);
     ndt->setTransformationEpsilon(0.01);
     ndt->setNeighborhoodSearchMethod(pclomp::DIRECT7);
@@ -60,8 +60,8 @@ GraphBasedSlamComponent::GraphBasedSlamComponent(const rclcpp::NodeOptions & opt
     }
     registration_ = ndt;
   } else {
-    auto gicp = pcl::make_shared<pclomp::GeneralizedIterativeClosestPoint<pcl::PointXYZI,
-        pcl::PointXYZI>>();
+    auto gicp = pcl::make_shared<pclomp::GeneralizedIterativeClosestPoint<pcl::PointXYZ,
+        pcl::PointXYZ>>();
     if (ndt_num_threads_ > 0) {
       gicp->setNumThreads(ndt_num_threads_);
     }
@@ -141,7 +141,7 @@ void GraphBasedSlamComponent::searchLoop()
   auto & latest_submap = map_array_msg.submaps[num_submaps - 1];
 
   // Convert latest cloud from ROS to PCL
-  pcl::PointCloud<pcl::PointXYZI>::Ptr latest_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr latest_cloud(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(latest_submap.cloud, *latest_cloud);
 
   // Transform latest cloud to global frame if cloud_coordinate is LOCAL
@@ -189,11 +189,11 @@ void GraphBasedSlamComponent::searchLoop()
   }
 
   // Build target cloud from adjacent submaps around the candidate
-  pcl::PointCloud<pcl::PointXYZI>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>());
   for (int j = std::max(0, min_index - search_submap_num_);
     j <= std::min(num_submaps - 2, min_index + search_submap_num_); j++)
   {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr submap_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr submap_cloud(new pcl::PointCloud<pcl::PointXYZ>());
     pcl::fromROSMsg(map_array_msg.submaps[j].cloud, *submap_cloud);
 
     if (map_array_msg.cloud_coordinate == slam_msgs::msg::MapArray::LOCAL) {
@@ -205,7 +205,7 @@ void GraphBasedSlamComponent::searchLoop()
   }
 
   // Voxel filter target cloud
-  pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_target(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_target(new pcl::PointCloud<pcl::PointXYZ>());
   voxelgrid_.setInputCloud(target_cloud);
   voxelgrid_.filter(*filtered_target);
 
@@ -213,7 +213,7 @@ void GraphBasedSlamComponent::searchLoop()
   registration_->setInputSource(latest_cloud);
   registration_->setInputTarget(filtered_target);
 
-  pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZ>());
   registration_->align(*output_cloud);
 
   double fitness_score = registration_->getFitnessScore();
@@ -362,7 +362,7 @@ void GraphBasedSlamComponent::doPoseAdjustment(
   modified_map_array.header.stamp = this->now();
   modified_map_array.cloud_coordinate = map_array_msg.cloud_coordinate;
 
-  pcl::PointCloud<pcl::PointXYZI>::Ptr global_map(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr global_map(new pcl::PointCloud<pcl::PointXYZ>());
   nav_msgs::msg::Path modified_path;
   modified_path.header.frame_id = "map";
   modified_path.header.stamp = this->now();
@@ -380,7 +380,7 @@ void GraphBasedSlamComponent::doPoseAdjustment(
     modified_map_array.submaps.push_back(submap);
 
     // Build global map
-    pcl::PointCloud<pcl::PointXYZI>::Ptr submap_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr submap_cloud(new pcl::PointCloud<pcl::PointXYZ>());
     pcl::fromROSMsg(submap.cloud, *submap_cloud);
 
     if (map_array_msg.cloud_coordinate == slam_msgs::msg::MapArray::LOCAL) {
@@ -413,7 +413,7 @@ void GraphBasedSlamComponent::doPoseAdjustment(
 
   // Save map if requested
   if (do_save_map) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr save_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr save_cloud(new pcl::PointCloud<pcl::PointXYZ>());
     voxelgrid_.setInputCloud(global_map);
     voxelgrid_.filter(*save_cloud);
 

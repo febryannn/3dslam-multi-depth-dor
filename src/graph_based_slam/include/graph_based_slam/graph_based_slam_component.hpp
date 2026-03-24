@@ -57,8 +57,8 @@ private:
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr map_save_srv_;
 
   // Registration for loop closure matching
-  pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr registration_;
-  pcl::VoxelGrid<pcl::PointXYZI> voxelgrid_;
+  pcl::Registration<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration_;
+  pcl::VoxelGrid<pcl::PointXYZ> voxelgrid_;
 
   // State
   slam_msgs::msg::MapArray map_array_msg_;
