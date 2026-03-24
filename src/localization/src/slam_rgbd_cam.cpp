@@ -36,6 +36,14 @@
 
 #include <Eigen/Dense>
 
+// G2O HEADERS UNTUK BACKEND (POSE GRAPH OPTIMIZATION + LOOP CLOSURE)
+#include <g2o/core/sparse_optimizer.h>
+#include <g2o/core/block_solver.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/solvers/eigen/linear_solver_eigen.h>
+#include <g2o/types/slam3d/vertex_se3.h>
+#include <g2o/types/slam3d/edge_se3.h>
+
 /**
  * 3D SLAM Node — Arsitektur scan-to-submap ala lidarslam_ros2
  *
@@ -84,6 +92,14 @@ public:
         this->declare_parameter("odom_topic", "/odom");
         this->declare_parameter("fitness_score_threshold", 0.5);
 
+        // Parameter Loop Closure + G2O Backend
+        this->declare_parameter("enable_loop_closure", true);
+        this->declare_parameter("loop_closure_min_interval", 20);    // Minimal 20 submap sebelum cari loop
+        this->declare_parameter("loop_closure_check_interval", 5);   // Cek loop tiap 5 submap baru
+        this->declare_parameter("loop_closure_search_radius", 3.0);  // Radius pencarian (meter)
+        this->declare_parameter("loop_closure_fitness_threshold", 0.8); // Fitness score max untuk LC
+        this->declare_parameter("g2o_iterations", 15);               // Iterasi optimasi g2o
+
         registration_method_ = this->get_parameter("registration_method").as_string();
         ndt_resolution_ = this->get_parameter("ndt_resolution").as_double();
         gicp_corr_dist_ = this->get_parameter("gicp_corr_dist_threshold").as_double();
@@ -106,6 +122,14 @@ public:
         std::string input_topic = this->get_parameter("input_cloud_topic").as_string();
         std::string odom_topic = this->get_parameter("odom_topic").as_string();
         fitness_score_threshold_ = this->get_parameter("fitness_score_threshold").as_double();
+
+        // Loop Closure + G2O params
+        enable_loop_closure_ = this->get_parameter("enable_loop_closure").as_bool();
+        lc_min_interval_ = this->get_parameter("loop_closure_min_interval").as_int();
+        lc_check_interval_ = this->get_parameter("loop_closure_check_interval").as_int();
+        lc_search_radius_ = this->get_parameter("loop_closure_search_radius").as_double();
+        lc_fitness_threshold_ = this->get_parameter("loop_closure_fitness_threshold").as_double();
+        g2o_iterations_ = this->get_parameter("g2o_iterations").as_int();
 
         // --- Registration algorithm ---
         setupRegistration();
@@ -154,6 +178,8 @@ public:
         RCLCPP_INFO(this->get_logger(), "  Submap trigger: %.2fm / %.2frad | Target submaps: %d",
                     trans_for_mapupdate_, angle_for_mapupdate_, num_targeted_cloud_);
         RCLCPP_INFO(this->get_logger(), "  Save: ros2 service call /slam/save_map std_srvs/srv/Empty");
+        RCLCPP_INFO(this->get_logger(), "  Loop Closure: %s | Radius: %.1fm | G2O iter: %d",
+                    enable_loop_closure_ ? "ON" : "OFF", lc_search_radius_, g2o_iterations_);
     }
 
     ~SlamRgbdCam() { saveMap(); }
@@ -432,6 +458,13 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "Submap #%zu (dist: %.2fm, target: %zu pts)",
                     submaps_.size(), submap.distance, new_targeted.size());
+
+        // --- BACKEND: LOOP CLOSURE DETECTION ---
+        if (enable_loop_closure_ &&
+            submaps_.size() > static_cast<size_t>(lc_min_interval_) &&
+            submaps_.size() % lc_check_interval_ == 0) {
+            detectLoopClosureAndOptimize();
+        }
     }
 
     // =============== Publish Functions ===============
@@ -621,6 +654,171 @@ private:
         saveMap();
     }
 
+    // =============== Loop Closure Detection + G2O Backend ===============
+    struct LoopEdge {
+        int from_id;
+        int to_id;
+        Eigen::Isometry3d relative_pose;
+    };
+
+    void detectLoopClosureAndOptimize() {
+        std::lock_guard<std::mutex> lock(map_mutex_);
+
+        int latest_idx = static_cast<int>(submaps_.size()) - 1;
+        Eigen::Vector3f latest_pos = submaps_[latest_idx].pose.block<3, 1>(0, 3);
+
+        int best_candidate = -1;
+        double min_dist = 1e9;
+
+        // Cari submap lama (minimal lc_min_interval_ node yang lalu) yang dekat posisi sekarang
+        for (int i = 0; i < latest_idx - lc_min_interval_; i++) {
+            Eigen::Vector3f candidate_pos = submaps_[i].pose.block<3, 1>(0, 3);
+            double dist = (latest_pos - candidate_pos).cast<double>().norm();
+            if (dist < lc_search_radius_ && dist < min_dist) {
+                min_dist = dist;
+                best_candidate = i;
+            }
+        }
+
+        if (best_candidate == -1) return;
+
+        // Validasi loop closure dengan GICP scan matching
+        auto source = std::make_shared<PointCloudT>();
+        auto target = std::make_shared<PointCloudT>();
+
+        // Transform kedua cloud ke frame global untuk matching
+        pcl::transformPointCloud(*submaps_[latest_idx].cloud, *source, submaps_[latest_idx].pose);
+        pcl::transformPointCloud(*submaps_[best_candidate].cloud, *target, submaps_[best_candidate].pose);
+
+        pcl::GeneralizedIterativeClosestPoint<PointT, PointT> gicp;
+        gicp.setMaxCorrespondenceDistance(2.0);
+        gicp.setTransformationEpsilon(1e-6);
+        gicp.setMaximumIterations(64);
+        gicp.setInputSource(source);
+        gicp.setInputTarget(target);
+
+        PointCloudT aligned;
+        gicp.align(aligned);
+
+        if (gicp.hasConverged() && gicp.getFitnessScore() < lc_fitness_threshold_) {
+            RCLCPP_INFO(this->get_logger(),
+                "== LOOP CLOSURE DETECTED (submap %d -> %d, dist: %.2fm, fitness: %.4f) ==",
+                best_candidate, latest_idx, min_dist, gicp.getFitnessScore());
+
+            // Hitung relative pose: dari candidate ke latest setelah koreksi
+            Eigen::Matrix4f correction = gicp.getFinalTransformation();
+            Eigen::Matrix4f relative = submaps_[best_candidate].pose.inverse() * correction * submaps_[latest_idx].pose;
+
+            LoopEdge edge;
+            edge.from_id = best_candidate;
+            edge.to_id = latest_idx;
+            edge.relative_pose = Eigen::Isometry3d(relative.cast<double>());
+            loop_edges_.push_back(edge);
+
+            runPoseGraphOptimization();
+        } else {
+            RCLCPP_DEBUG(this->get_logger(),
+                "Loop candidate %d rejected (converged=%d, fitness=%.4f)",
+                best_candidate, gicp.hasConverged(),
+                gicp.hasConverged() ? gicp.getFitnessScore() : -1.0);
+        }
+    }
+
+    void runPoseGraphOptimization() {
+        // map_mutex_ sudah di-lock oleh detectLoopClosureAndOptimize()
+
+        g2o::SparseOptimizer optimizer;
+        optimizer.setVerbose(false);
+
+        auto linearSolver = std::make_unique<
+            g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
+        auto solver = new g2o::OptimizationAlgorithmLevenberg(
+            std::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
+        optimizer.setAlgorithm(solver);
+
+        Eigen::Matrix<double, 6, 6> odom_info = Eigen::Matrix<double, 6, 6>::Identity();
+        Eigen::Matrix<double, 6, 6> lc_info = Eigen::Matrix<double, 6, 6>::Identity() * 0.5;
+
+        // 1. Tambah Vertex (Pose setiap Submap)
+        for (size_t i = 0; i < submaps_.size(); i++) {
+            g2o::VertexSE3* v = new g2o::VertexSE3();
+            v->setId(static_cast<int>(i));
+            v->setEstimate(Eigen::Isometry3d(submaps_[i].pose.cast<double>()));
+            if (i == 0) v->setFixed(true);
+            optimizer.addVertex(v);
+        }
+
+        // 2. Tambah Edge Sequential (Odometry constraints dari scan matching)
+        for (size_t i = 1; i < submaps_.size(); i++) {
+            Eigen::Isometry3d prev(submaps_[i - 1].pose.cast<double>());
+            Eigen::Isometry3d curr(submaps_[i].pose.cast<double>());
+            Eigen::Isometry3d rel = prev.inverse() * curr;
+
+            g2o::EdgeSE3* edge = new g2o::EdgeSE3();
+            edge->setVertex(0, optimizer.vertex(static_cast<int>(i - 1)));
+            edge->setVertex(1, optimizer.vertex(static_cast<int>(i)));
+            edge->setMeasurement(rel);
+            edge->setInformation(odom_info);
+            optimizer.addEdge(edge);
+        }
+
+        // 3. Tambah Edge Loop Closure
+        for (const auto& lc : loop_edges_) {
+            g2o::EdgeSE3* edge = new g2o::EdgeSE3();
+            edge->setVertex(0, optimizer.vertex(lc.from_id));
+            edge->setVertex(1, optimizer.vertex(lc.to_id));
+            edge->setMeasurement(lc.relative_pose);
+            edge->setInformation(lc_info);
+            optimizer.addEdge(edge);
+        }
+
+        RCLCPP_INFO(this->get_logger(), "G2O: Optimizing %zu vertices, %zu edges (%zu LC)...",
+                    submaps_.size(), submaps_.size() - 1 + loop_edges_.size(), loop_edges_.size());
+
+        optimizer.initializeOptimization();
+        optimizer.optimize(g2o_iterations_);
+
+        // 4. Update semua pose submap dengan hasil optimasi
+        for (size_t i = 0; i < submaps_.size(); i++) {
+            g2o::VertexSE3* v = static_cast<g2o::VertexSE3*>(
+                optimizer.vertex(static_cast<int>(i)));
+            submaps_[i].pose = v->estimate().matrix().cast<float>();
+        }
+
+        // 5. Koreksi current pose dan previous position
+        current_pose_ = submaps_.back().pose;
+        last_submap_pose_ = current_pose_;
+
+        // 6. Rebuild trajectory path di RViz
+        path_msg_.poses.clear();
+        for (const auto& sm : submaps_) {
+            geometry_msgs::msg::PoseStamped ps;
+            ps.header.frame_id = global_frame_id_;
+            Eigen::Quaternionf q(Eigen::Matrix3f(sm.pose.block<3, 3>(0, 0)));
+            ps.pose.position.x = sm.pose(0, 3);
+            ps.pose.position.y = sm.pose(1, 3);
+            ps.pose.position.z = sm.pose(2, 3);
+            ps.pose.orientation.x = q.x();
+            ps.pose.orientation.y = q.y();
+            ps.pose.orientation.z = q.z();
+            ps.pose.orientation.w = q.w();
+            path_msg_.poses.push_back(ps);
+        }
+
+        // 7. Rebuild targeted cloud dengan pose baru
+        PointCloudT new_targeted;
+        int n = static_cast<int>(submaps_.size());
+        for (int i = std::max(0, n - num_targeted_cloud_); i < n; i++) {
+            auto tmp = std::make_shared<PointCloudT>();
+            pcl::transformPointCloud(*submaps_[i].cloud, *tmp, submaps_[i].pose);
+            new_targeted += *tmp;
+        }
+        targeted_cloud_copy_ = new_targeted;
+        is_map_updated_ = true;
+
+        RCLCPP_INFO(this->get_logger(), "G2O: Optimization done. Drift corrected.");
+    }
+
     // =============== Data ===============
     struct SubMap {
         PointCloudT::Ptr cloud;
@@ -637,6 +835,11 @@ private:
     int num_targeted_cloud_;
     bool use_odom_, publish_tf_;
 
+    // Loop Closure + G2O params
+    bool enable_loop_closure_;
+    int lc_min_interval_, lc_check_interval_, g2o_iterations_;
+    double lc_search_radius_, lc_fitness_threshold_;
+
     // Registration
     pcl::Registration<PointT, PointT>::Ptr registration_;
 
@@ -652,8 +855,9 @@ private:
     std::mutex odom_mutex_;
     bool has_odom_ = false;
 
-    // Submaps
+    // Submaps + Loop Closure
     std::vector<SubMap> submaps_;
+    std::vector<LoopEdge> loop_edges_;
     PointCloudT targeted_cloud_copy_;
     std::mutex map_mutex_;
 
