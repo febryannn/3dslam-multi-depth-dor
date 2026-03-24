@@ -90,6 +90,7 @@ private:
     double distance;
   };
   std::vector<SubMapData> submaps_;
+  std::mutex slam_mutex_;  // Protects submaps_, current_pose_, path_, etc.
 
   // State
   Eigen::Matrix4f current_pose_ = Eigen::Matrix4f::Identity();
@@ -114,7 +115,12 @@ private:
   // TF re-publish timer (keeps map->odom fresh)
   rclcpp::TimerBase::SharedPtr tf_republish_timer_;
   geometry_msgs::msg::TransformStamped last_tf_msg_;
+  std::mutex tf_mutex_;  // Protects last_tf_msg_ and has_valid_tf_
   bool has_valid_tf_ = false;
+
+  // Callback groups for multi-threaded executor
+  rclcpp::CallbackGroup::SharedPtr processing_cb_group_;
+  rclcpp::CallbackGroup::SharedPtr timer_cb_group_;
 
   // Parameters
   std::string registration_method_;

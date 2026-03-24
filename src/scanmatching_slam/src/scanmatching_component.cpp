@@ -72,16 +72,26 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
   broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
   listener_ = std::make_shared<tf2_ros::TransformListener>(tfbuffer_);
 
+  // Callback groups: separate heavy processing from lightweight timers
+  processing_cb_group_ = this->create_callback_group(
+    rclcpp::CallbackGroupType::MutuallyExclusive);
+  timer_cb_group_ = this->create_callback_group(
+    rclcpp::CallbackGroupType::MutuallyExclusive);
+
   // Publishers
   map_array_pub_ = this->create_publisher<slam_msgs::msg::MapArray>("map_array", 1);
   pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("current_pose", 1);
   map_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("map", 1);
   path_pub_ = this->create_publisher<nav_msgs::msg::Path>("path", 1);
 
-  // Subscribers
+  // Subscribers (heavy processing group)
+  rclcpp::SubscriptionOptions sub_opts;
+  sub_opts.callback_group = processing_cb_group_;
+
   cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     input_cloud_topic_, rclcpp::SensorDataQoS(),
-    std::bind(&ScanMatchingComponent::cloudCallback, this, std::placeholders::_1));
+    std::bind(&ScanMatchingComponent::cloudCallback, this, std::placeholders::_1),
+    sub_opts);
 
   if (use_odom_) {
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -93,15 +103,16 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
     "modified_map_array", rclcpp::QoS(1).reliable(),
     std::bind(&ScanMatchingComponent::mapArrayCallback, this, std::placeholders::_1));
 
-  // Map publish timer
+  // Timers (separate group - can fire while NDT is processing)
   map_publish_timer_ = this->create_wall_timer(
     std::chrono::duration<double>(map_publish_period_),
-    std::bind(&ScanMatchingComponent::mapPublishTimerCallback, this));
+    std::bind(&ScanMatchingComponent::mapPublishTimerCallback, this),
+    timer_cb_group_);
 
-  // TF re-publish timer at 10Hz to keep map->odom fresh between slow NDT cycles
   tf_republish_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(100),
-    std::bind(&ScanMatchingComponent::republishTF, this));
+    std::bind(&ScanMatchingComponent::republishTF, this),
+    timer_cb_group_);
 
   path_.header.frame_id = global_frame_id_;
 
@@ -164,6 +175,7 @@ void ScanMatchingComponent::cloudCallback(const sensor_msgs::msg::PointCloud2::S
 void ScanMatchingComponent::initializeMap(
   PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse, const rclcpp::Time & stamp)
 {
+  std::lock_guard<std::mutex> lock(slam_mutex_);
   auto & cloud = cloud_fine;  // Store fine cloud in map
   RCLCPP_INFO(get_logger(), "Initializing map with first cloud (%zu fine, %zu coarse points)",
     cloud_fine->size(), cloud_coarse->size());
@@ -219,35 +231,31 @@ void ScanMatchingComponent::initializeMap(
 void ScanMatchingComponent::receiveCloud(
   PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse, const rclcpp::Time & stamp)
 {
-  if (submaps_.empty()) {
-    RCLCPP_WARN(get_logger(), "No submaps available for matching");
-    return;
+  // Phase 1: Build target cloud (needs slam_mutex_)
+  PointCloudT::Ptr target_cloud;
+  Eigen::Matrix4f initial_guess;
+  {
+    std::lock_guard<std::mutex> lock(slam_mutex_);
+    if (submaps_.empty()) {
+      RCLCPP_WARN(get_logger(), "No submaps available for matching");
+      return;
+    }
+    target_cloud = getTargetCloud();
+    initial_guess = use_odom_ ? getOdomInitialGuess() : current_pose_;
   }
 
-  // Build target from recent submaps
-  PointCloudT::Ptr target_cloud = getTargetCloud();
   if (target_cloud->empty()) {
     RCLCPP_WARN(get_logger(), "Target cloud is empty");
     return;
   }
 
-  // Downsample target to matching resolution
+  // Phase 2: NDT alignment (NO lock - this is the slow part)
   PointCloudT::Ptr target_downsampled(new PointCloudT);
   applyVoxelFilter(target_cloud, target_downsampled, vg_size_for_matching_);
 
-  // Set target and source (both coarse for fast matching)
   registration_->setInputTarget(target_downsampled);
   registration_->setInputSource(cloud_coarse);
 
-  // Initial guess: either from odom or from previous pose
-  Eigen::Matrix4f initial_guess = Eigen::Matrix4f::Identity();
-  if (use_odom_) {
-    initial_guess = getOdomInitialGuess();
-  } else {
-    initial_guess = current_pose_;
-  }
-
-  // Perform scan matching on coarse clouds (fast)
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
     "Aligning cloud (%zu coarse pts) against target (%zu pts)",
     cloud_coarse->size(), target_downsampled->size());
@@ -264,27 +272,27 @@ void ScanMatchingComponent::receiveCloud(
 
   Eigen::Matrix4f matched_pose = registration_->getFinalTransformation();
 
-  // Calculate translation from previous pose
-  Eigen::Vector3f delta_translation =
-    matched_pose.block<3, 1>(0, 3) - previous_pose_.block<3, 1>(0, 3);
-  double delta_dist = delta_translation.norm();
+  // Phase 3: Update state (needs slam_mutex_)
+  {
+    std::lock_guard<std::mutex> lock(slam_mutex_);
 
-  total_distance_ += delta_dist;
-  submap_distance_ += delta_dist;
+    Eigen::Vector3f delta_translation =
+      matched_pose.block<3, 1>(0, 3) - previous_pose_.block<3, 1>(0, 3);
+    double delta_dist = delta_translation.norm();
 
-  // Update current pose
-  current_pose_ = matched_pose;
+    total_distance_ += delta_dist;
+    submap_distance_ += delta_dist;
+    current_pose_ = matched_pose;
 
-  // Publish pose and TF
-  publishMapAndPose(current_pose_, stamp);
+    publishMapAndPose(current_pose_, stamp);
 
-  // Store FINE cloud in map for quality, but matched with COARSE for speed
-  if (submap_distance_ >= trans_for_mapupdate_) {
-    updateMap(cloud_fine, current_pose_);
-    submap_distance_ = 0.0;
+    if (submap_distance_ >= trans_for_mapupdate_) {
+      updateMap(cloud_fine, current_pose_);
+      submap_distance_ = 0.0;
+    }
+
+    previous_pose_ = current_pose_;
   }
-
-  previous_pose_ = current_pose_;
 
   // Update odom reference
   if (use_odom_) {
@@ -433,14 +441,18 @@ void ScanMatchingComponent::publishMapAndPose(
       transform.transform.rotation = pose_msg2.orientation;
     }
 
-    last_tf_msg_ = transform;
-    has_valid_tf_ = true;
+    {
+      std::lock_guard<std::mutex> lock(tf_mutex_);
+      last_tf_msg_ = transform;
+      has_valid_tf_ = true;
+    }
     broadcaster_->sendTransform(transform);
   }
 }
 
 void ScanMatchingComponent::republishTF()
 {
+  std::lock_guard<std::mutex> lock(tf_mutex_);
   if (!has_valid_tf_) {
     return;
   }
@@ -483,6 +495,7 @@ void ScanMatchingComponent::mapArrayCallback(const slam_msgs::msg::MapArray::Sha
 
 void ScanMatchingComponent::mapPublishTimerCallback()
 {
+  std::lock_guard<std::mutex> lock(slam_mutex_);
   if (submaps_.empty()) {
     return;
   }
