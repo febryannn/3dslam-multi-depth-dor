@@ -48,10 +48,13 @@ private:
   void mapArrayCallback(const slam_msgs::msg::MapArray::SharedPtr msg);
 
   // Core functions
-  void initializeMap(PointCloudT::Ptr cloud, const rclcpp::Time & stamp);
-  void receiveCloud(PointCloudT::Ptr cloud, const rclcpp::Time & stamp);
+  void initializeMap(PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse,
+    const rclcpp::Time & stamp);
+  void receiveCloud(PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse,
+    const rclcpp::Time & stamp);
   void updateMap(PointCloudT::Ptr cloud, const Eigen::Matrix4f & pose);
   void publishMapAndPose(const Eigen::Matrix4f & pose, const rclcpp::Time & stamp);
+  void republishTF();
 
   // Helpers
   Eigen::Matrix4f getOdomInitialGuess();
@@ -108,6 +111,11 @@ private:
   rclcpp::TimerBase::SharedPtr map_publish_timer_;
   void mapPublishTimerCallback();
 
+  // TF re-publish timer (keeps map->odom fresh)
+  rclcpp::TimerBase::SharedPtr tf_republish_timer_;
+  geometry_msgs::msg::TransformStamped last_tf_msg_;
+  bool has_valid_tf_ = false;
+
   // Parameters
   std::string registration_method_;
   double ndt_resolution_;
@@ -116,6 +124,7 @@ private:
   double trans_for_mapupdate_;
   double vg_size_for_input_;
   double vg_size_for_map_;
+  double vg_size_for_matching_;
   double scan_min_range_;
   double scan_max_range_;
   int num_targeted_cloud_;

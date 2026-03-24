@@ -28,6 +28,7 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
   trans_for_mapupdate_ = this->declare_parameter<double>("trans_for_mapupdate", 0.3);
   vg_size_for_input_ = this->declare_parameter<double>("vg_size_for_input", 0.05);
   vg_size_for_map_ = this->declare_parameter<double>("vg_size_for_map", 0.05);
+  vg_size_for_matching_ = this->declare_parameter<double>("vg_size_for_matching", 0.15);
   scan_min_range_ = this->declare_parameter<double>("scan_min_range", 0.5);
   scan_max_range_ = this->declare_parameter<double>("scan_max_range", 4.0);
   num_targeted_cloud_ = this->declare_parameter<int>("num_targeted_cloud", 20);
@@ -97,6 +98,11 @@ ScanMatchingComponent::ScanMatchingComponent(const rclcpp::NodeOptions & options
     std::chrono::duration<double>(map_publish_period_),
     std::bind(&ScanMatchingComponent::mapPublishTimerCallback, this));
 
+  // TF re-publish timer at 10Hz to keep map->odom fresh between slow NDT cycles
+  tf_republish_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(100),
+    std::bind(&ScanMatchingComponent::republishTF, this));
+
   path_.header.frame_id = global_frame_id_;
 
   RCLCPP_INFO(get_logger(), "ScanMatchingComponent initialized");
@@ -138,22 +144,29 @@ void ScanMatchingComponent::cloudCallback(const sensor_msgs::msg::PointCloud2::S
     return;
   }
 
-  // Voxel downsample input
-  PointCloudT::Ptr downsampled(new PointCloudT);
-  applyVoxelFilter(filtered, downsampled, vg_size_for_input_);
+  // Fine cloud for map storage
+  PointCloudT::Ptr cloud_fine(new PointCloudT);
+  applyVoxelFilter(filtered, cloud_fine, vg_size_for_input_);
+
+  // Coarse cloud for fast scan matching
+  PointCloudT::Ptr cloud_coarse(new PointCloudT);
+  applyVoxelFilter(filtered, cloud_coarse, vg_size_for_matching_);
 
   rclcpp::Time stamp = msg->header.stamp;
 
   if (!initial_cloud_received_) {
-    initializeMap(downsampled, stamp);
+    initializeMap(cloud_fine, cloud_coarse, stamp);
   } else {
-    receiveCloud(downsampled, stamp);
+    receiveCloud(cloud_fine, cloud_coarse, stamp);
   }
 }
 
-void ScanMatchingComponent::initializeMap(PointCloudT::Ptr cloud, const rclcpp::Time & stamp)
+void ScanMatchingComponent::initializeMap(
+  PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse, const rclcpp::Time & stamp)
 {
-  RCLCPP_INFO(get_logger(), "Initializing map with first cloud (%zu points)", cloud->size());
+  auto & cloud = cloud_fine;  // Store fine cloud in map
+  RCLCPP_INFO(get_logger(), "Initializing map with first cloud (%zu fine, %zu coarse points)",
+    cloud_fine->size(), cloud_coarse->size());
 
   current_pose_ = Eigen::Matrix4f::Identity();
   previous_pose_ = Eigen::Matrix4f::Identity();
@@ -203,7 +216,8 @@ void ScanMatchingComponent::initializeMap(PointCloudT::Ptr cloud, const rclcpp::
   RCLCPP_INFO(get_logger(), "Map initialized with first submap");
 }
 
-void ScanMatchingComponent::receiveCloud(PointCloudT::Ptr cloud, const rclcpp::Time & stamp)
+void ScanMatchingComponent::receiveCloud(
+  PointCloudT::Ptr cloud_fine, PointCloudT::Ptr cloud_coarse, const rclcpp::Time & stamp)
 {
   if (submaps_.empty()) {
     RCLCPP_WARN(get_logger(), "No submaps available for matching");
@@ -217,29 +231,26 @@ void ScanMatchingComponent::receiveCloud(PointCloudT::Ptr cloud, const rclcpp::T
     return;
   }
 
-  // Downsample target
+  // Downsample target to matching resolution
   PointCloudT::Ptr target_downsampled(new PointCloudT);
-  applyVoxelFilter(target_cloud, target_downsampled, vg_size_for_map_);
+  applyVoxelFilter(target_cloud, target_downsampled, vg_size_for_matching_);
 
-  // Set target
+  // Set target and source (both coarse for fast matching)
   registration_->setInputTarget(target_downsampled);
-
-  // Set source
-  registration_->setInputSource(cloud);
+  registration_->setInputSource(cloud_coarse);
 
   // Initial guess: either from odom or from previous pose
   Eigen::Matrix4f initial_guess = Eigen::Matrix4f::Identity();
   if (use_odom_) {
     initial_guess = getOdomInitialGuess();
   } else {
-    // Use last known displacement as initial guess
     initial_guess = current_pose_;
   }
 
-  // Perform scan matching
+  // Perform scan matching on coarse clouds (fast)
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000,
-    "Aligning cloud (%zu pts) against target (%zu pts)",
-    cloud->size(), target_downsampled->size());
+    "Aligning cloud (%zu coarse pts) against target (%zu pts)",
+    cloud_coarse->size(), target_downsampled->size());
   PointCloudT::Ptr result(new PointCloudT);
   registration_->align(*result, initial_guess);
 
@@ -267,9 +278,9 @@ void ScanMatchingComponent::receiveCloud(PointCloudT::Ptr cloud, const rclcpp::T
   // Publish pose and TF
   publishMapAndPose(current_pose_, stamp);
 
-  // Check if we need a new submap
+  // Store FINE cloud in map for quality, but matched with COARSE for speed
   if (submap_distance_ >= trans_for_mapupdate_) {
-    updateMap(cloud, current_pose_);
+    updateMap(cloud_fine, current_pose_);
     submap_distance_ = 0.0;
   }
 
@@ -422,8 +433,20 @@ void ScanMatchingComponent::publishMapAndPose(
       transform.transform.rotation = pose_msg2.orientation;
     }
 
+    last_tf_msg_ = transform;
+    has_valid_tf_ = true;
     broadcaster_->sendTransform(transform);
   }
+}
+
+void ScanMatchingComponent::republishTF()
+{
+  if (!has_valid_tf_) {
+    return;
+  }
+  // Re-broadcast last known map->odom with current timestamp
+  last_tf_msg_.header.stamp = this->now();
+  broadcaster_->sendTransform(last_tf_msg_);
 }
 
 void ScanMatchingComponent::mapArrayCallback(const slam_msgs::msg::MapArray::SharedPtr msg)
